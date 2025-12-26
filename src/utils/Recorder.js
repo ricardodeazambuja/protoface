@@ -101,21 +101,18 @@ export class AnimationRecorder {
                 const svg = element.querySelector('svg');
                 if (svg) {
                     // Clone and clean the SVG to remove styles that cause internal shifting/clipping
-                    // Dynamic Dimension Detection (Refactor: Remove Magic Numbers)
+                    // Use actual rendered dimensions from the DOM to match UI display
                     const svgWidth = svg.clientWidth || parseFloat(svg.getAttribute('width')) || 200;
                     const svgHeight = svg.clientHeight || parseFloat(svg.getAttribute('height')) || 200;
 
                     const clone = svg.cloneNode(true);
                     clone.setAttribute('style', ''); // Remove all inline styles (position, transform, etc)
 
-                    // Original viewBox is "0 0 100 200", mapped to 200x200px.
-                    // We DO NOT extend it anymore to avoid aspect ratio distortion (shrinking).
-                    // Clone setup using dynamic dimensions
+                    // Keep the original dimensions and viewBox to match UI display
                     clone.setAttribute('width', svgWidth);
-                    clone.setAttribute('height', svgHeight); // Revert to original height
-                    // clone.setAttribute('viewBox', '0 0 100 300'); // REMOVED extended viewBox
+                    clone.setAttribute('height', svgHeight);
 
-                    // Ensure overflow is visible just in case, though standard viewBox usually handles it
+                    // Ensure overflow is visible to capture the full face including mouth
                     clone.style.overflow = 'visible';
 
                     const xml = new XMLSerializer().serializeToString(clone);
@@ -125,38 +122,36 @@ export class AnimationRecorder {
                     const img = new Image();
                     await new Promise((resolve) => {
                         img.onload = () => {
-                            // Apply the computed transform matrix from the actual DOM element
+                            // Get the computed transform from the DOM element
                             const style = window.getComputedStyle(svg);
                             const matrix = new DOMMatrix(style.transform);
 
-                            // 4a. Get Transform Origin (CRITICAL FIX for Scaling/Rotation)
+                            // Get Transform Origin (in pixels) - usually center of the SVG
                             const transformOrigin = style.transformOrigin || '50% 50%';
-                            // Parse origin (usually "xpx ypx")
                             let [ox, oy] = transformOrigin.split(' ').map(parseFloat);
-                            // Handle cases where only one value is given or it's keywords (simplified fallback)
-                            if (isNaN(ox)) ox = svgWidth / 2; // Default to center
-                            if (isNaN(oy)) oy = svgHeight / 2; // Default to center
-
-                            // Apply the "Sandwich" Transform: Translate(Origin) -> Matrix -> Translate(-Origin)
+                            if (isNaN(ox)) ox = svgWidth / 2;
+                            if (isNaN(oy)) oy = svgHeight / 2;
 
                             this.offscreenCtx.save();
 
-                            // Step 1: Move Context to Layout Center (Canvas Center)
-                            // CSS Layout places the element at top: 50%, left: 50%.
-                            // The matrix includes the translateX(-50%) logic implicitly (from Framer Motion or Manual calculation).
-                            // We start at the absolute center of the canvas.
+                            // The SVG in the DOM is positioned using:
+                            // position: absolute; top: 50%; left: 50%;
+                            // This means the SVG's top-left corner is at the container's center.
+                            // Then Framer Motion applies: x: calc(-50% + Xpx), y: calc(-50% + Ypx)
+                            // which shifts it left/up by half its size (centering it) plus user offset.
+                            //
+                            // The matrix already contains these translations (matrix.e ≈ -100 + user.x).
+                            // So we start at canvas center (matching CSS top/left: 50%)
+                            // and apply the matrix which handles the centering.
+
                             this.offscreenCtx.translate(this.offscreenCanvas.width / 2, this.offscreenCanvas.height / 2);
 
-                            // Step 2 & 3: Apply Matrix around the Pivot (ox, oy)
-                            // Standard pivot rotation: translate(ox, oy) * matrix * translate(-ox, -oy)
-                            // This rotates/scales the element around its own pivot point (ox, oy).
-                            // Note: If ox,oy are (Center,Center), this effectively does nothing relative to center IF the matrix is identity,
-                            // but crucial for rotation/scaling.
+                            // Apply transform around the pivot point (for rotation/scaling)
                             this.offscreenCtx.translate(ox, oy);
                             this.offscreenCtx.transform(matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f);
                             this.offscreenCtx.translate(-ox, -oy);
 
-                            // Draw the image at (0,0). The matrix includes centering logic.
+                            // Draw the SVG image at 0,0 (matrix positions it correctly)
                             this.offscreenCtx.drawImage(img, 0, 0, svgWidth, svgHeight);
 
                             this.offscreenCtx.restore();
