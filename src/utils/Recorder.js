@@ -101,58 +101,69 @@ export class AnimationRecorder {
                 const svg = element.querySelector('svg');
                 if (svg) {
                     // Clone and clean the SVG to remove styles that cause internal shifting/clipping
-                    // Use actual rendered dimensions from the DOM to match UI display
                     const svgWidth = svg.clientWidth || parseFloat(svg.getAttribute('width')) || 200;
                     const svgHeight = svg.clientHeight || parseFloat(svg.getAttribute('height')) || 200;
 
+                    // Calculate overflow padding needed for mouth extension
+                    // The mouth can extend ~50 viewBox units below the normal bounds
+                    const overflowPadding = 50;
+
                     const clone = svg.cloneNode(true);
-                    clone.setAttribute('style', ''); // Remove all inline styles (position, transform, etc)
+                    clone.setAttribute('style', '');
 
-                    // Keep the original dimensions and viewBox to match UI display
+                    // Get original viewBox and adjust to capture overflow at the bottom
+                    const viewBox = svg.getAttribute('viewBox');
+                    let vbY = 0, vbHeight = 200;
+                    if (viewBox) {
+                        const parts = viewBox.split(' ').map(parseFloat);
+                        if (parts.length === 4) {
+                            vbY = parts[1];
+                            vbHeight = parts[3];
+                            // Extend viewBox height to capture more at the bottom
+                            // Keep original y position and width, extend height
+                            clone.setAttribute('viewBox', `${parts[0]} ${vbY} ${parts[2]} ${vbHeight + overflowPadding}`);
+                        }
+                    }
+
+                    // Scale the element height proportionally to match extended viewBox
+                    const scaleFactor = svgHeight / vbHeight; // pixels per viewBox unit
+                    const extendedHeight = svgHeight + (overflowPadding * scaleFactor);
+
                     clone.setAttribute('width', svgWidth);
-                    clone.setAttribute('height', svgHeight);
-
-                    // Ensure overflow is visible to capture the full face including mouth
+                    clone.setAttribute('height', extendedHeight);
                     clone.style.overflow = 'visible';
 
                     const xml = new XMLSerializer().serializeToString(clone);
                     const svgBlob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' });
                     const url = URL.createObjectURL(svgBlob);
 
+                    // Use extended dimensions for image
+                    const imgWidth = svgWidth;
+                    const imgHeight = extendedHeight;
+
                     const img = new Image();
                     await new Promise((resolve) => {
                         img.onload = () => {
-                            // Get the computed transform from the DOM element
                             const style = window.getComputedStyle(svg);
                             const matrix = new DOMMatrix(style.transform);
 
-                            // Get Transform Origin (in pixels) - usually center of the SVG
                             const transformOrigin = style.transformOrigin || '50% 50%';
                             let [ox, oy] = transformOrigin.split(' ').map(parseFloat);
                             if (isNaN(ox)) ox = svgWidth / 2;
-                            if (isNaN(oy)) oy = svgHeight / 2;
+                            if (isNaN(oy)) oy = svgHeight / 2; // Use original height for origin
 
                             this.offscreenCtx.save();
 
-                            // The SVG in the DOM is positioned using:
-                            // position: absolute; top: 50%; left: 50%;
-                            // This means the SVG's top-left corner is at the container's center.
-                            // Then Framer Motion applies: x: calc(-50% + Xpx), y: calc(-50% + Ypx)
-                            // which shifts it left/up by half its size (centering it) plus user offset.
-                            //
-                            // The matrix already contains these translations (matrix.e ≈ -100 + user.x).
-                            // So we start at canvas center (matching CSS top/left: 50%)
-                            // and apply the matrix which handles the centering.
-
+                            // Start at canvas center
                             this.offscreenCtx.translate(this.offscreenCanvas.width / 2, this.offscreenCanvas.height / 2);
 
-                            // Apply transform around the pivot point (for rotation/scaling)
+                            // Apply transform around the pivot point
                             this.offscreenCtx.translate(ox, oy);
                             this.offscreenCtx.transform(matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f);
                             this.offscreenCtx.translate(-ox, -oy);
 
-                            // Draw the SVG image at 0,0 (matrix positions it correctly)
-                            this.offscreenCtx.drawImage(img, 0, 0, svgWidth, svgHeight);
+                            // Draw the extended image (content is the same scale, just taller)
+                            this.offscreenCtx.drawImage(img, 0, 0, imgWidth, imgHeight);
 
                             this.offscreenCtx.restore();
 
