@@ -10,7 +10,7 @@
 import * as ort from 'onnxruntime-web';
 
 // Configure ONNX Runtime to load WASM files from the public directory
-ort.env.wasm.wasmPaths = '/';
+ort.env.wasm.wasmPaths = import.meta.env.BASE_URL;
 
 // Constants for phoneme processing
 const BOS = "^";
@@ -212,8 +212,8 @@ self.onmessage = async (event) => {
             if (!modelUrl || !configUrl) {
                 const voice = voiceId || modelId;
                 // Try local first
-                modelUrl = `/piper/voices/${voice}/model.onnx`;
-                configUrl = `/piper/voices/${voice}/model.json`;
+                modelUrl = `${import.meta.env.BASE_URL}piper/voices/${voice}/model.onnx`;
+                configUrl = `${import.meta.env.BASE_URL}piper/voices/${voice}/model.json`;
             }
 
             self.postMessage({ type: 'progress', progress: 0.1 });
@@ -236,7 +236,7 @@ self.onmessage = async (event) => {
                     response = await fetch(url);
                 } catch (e) {
                     // If simple fetch fails, try fallback for relative paths
-                    if (url.startsWith('/piper/voices/')) {
+                    if (url.startsWith(`${import.meta.env.BASE_URL}piper/voices/`)) {
                         console.warn(`[Worker] Local fetch failed for ${url}, trying remote fallback...`);
                         // Fallback logic: Assuming we can construct a remote URL
                         // This is tricky because the worker doesn't strictly know the mapping.
@@ -247,8 +247,8 @@ self.onmessage = async (event) => {
 
                 if (!response.ok) {
                     // Attempt remote fallback if local 404s
-                    if (url.startsWith('/piper/voices/')) {
-                        const remoteUrl = `https://huggingface.co/rhasspy/piper-voices/resolve/main/${url.replace('/piper/voices/', '')}`;
+                    if (url.startsWith(`${import.meta.env.BASE_URL}piper/voices/`)) {
+                        const remoteUrl = `https://huggingface.co/rhasspy/piper-voices/resolve/main/${url.replace(`${import.meta.env.BASE_URL}piper/voices/`, '')}`;
                         console.log(`[Worker] Falling back to: ${remoteUrl}`);
                         response = await fetch(remoteUrl);
                     }
