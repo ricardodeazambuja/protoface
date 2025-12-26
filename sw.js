@@ -12,25 +12,25 @@ const CACHE_NAME = `protoface-${CACHE_VERSION}`;
 
 // Assets to cache on install (app shell + TTS engine)
 const PRECACHE_ASSETS = [
-    '/',
-    '/index.html',
-    '/site.webmanifest',
-    '/favicon.ico',
-    '/favicon-16x16.png',
-    '/favicon-32x32.png',
-    '/favicon-48x48.png',
-    '/apple-touch-icon.png',
-    '/android-chrome-192x192.png',
-    '/android-chrome-512x512.png'
+    './',
+    './index.html',
+    './site.webmanifest',
+    './favicon.ico',
+    './favicon-16x16.png',
+    './favicon-32x32.png',
+    './favicon-48x48.png',
+    './apple-touch-icon.png',
+    './android-chrome-192x192.png',
+    './android-chrome-512x512.png'
 ];
 
 // TTS engine assets (large files, cached separately)
 const TTS_ENGINE_ASSETS = [
-    '/piper/espeakng.worker.data',
-    '/piper/espeakng.worker.js',
-    '/piper/espeakng.worker.wasm',
-    '/piper/ort.min.js',
-    '/piper/piper.js'
+    './piper/espeakng.worker.data',
+    './piper/espeakng.worker.js',
+    './piper/espeakng.worker.wasm',
+    './piper/ort.min.js',
+    './piper/piper.js'
 ];
 
 // Install event - precache assets
@@ -113,7 +113,7 @@ self.addEventListener('fetch', (event) => {
                         return cachedResponse;
                     }
                     // Fallback to cached index.html for SPA routing
-                    return caches.match('/index.html');
+                    return caches.match('./index.html');
                 }
             })()
         );
