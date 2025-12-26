@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { VOICE_CATALOG_URL, CACHE_EXPIRY_MS } from '../constants';
 import { parseScriptSegments } from '../utils/parseScriptSegments';
+import localVoiceCatalog from '../data/voices.json';
 
 /**
  * useTTS - Custom hook for managing the Piper TTS Web Worker,
@@ -12,7 +13,7 @@ export const useTTS = (onAudioResult, onError) => {
     const [ttsLoading, setTtsLoading] = useState(false);
     const [ttsProgress, setTtsProgress] = useState(0);
     const [voice, setVoice] = useState('');
-    const [voiceCatalog, setVoiceCatalog] = useState({});
+    const [voiceCatalog, setVoiceCatalog] = useState(localVoiceCatalog);
     const [catalogLoading, setCatalogLoading] = useState(false);
     const [downloadedVoices, setDownloadedVoices] = useState(() => {
         try {
@@ -43,30 +44,6 @@ export const useTTS = (onAudioResult, onError) => {
                 if (onError) onError(error);
             }
         };
-
-        const fetchCatalog = async () => {
-            const CACHE_KEY = 'protoface-voice-catalog';
-            try {
-                const cached = localStorage.getItem(CACHE_KEY);
-                if (cached) {
-                    const { data, timestamp } = JSON.parse(cached);
-                    if (Date.now() - timestamp < CACHE_EXPIRY_MS) {
-                        setVoiceCatalog(data);
-                        return;
-                    }
-                }
-                setCatalogLoading(true);
-                const response = await fetch(VOICE_CATALOG_URL);
-                const data = await response.json();
-                setVoiceCatalog(data);
-                localStorage.setItem(CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
-            } catch (e) {
-                console.error("Failed to fetch voice catalog:", e);
-            } finally {
-                setCatalogLoading(false);
-            }
-        };
-        fetchCatalog();
 
         return () => {
             if (workerRef.current) workerRef.current.terminate();

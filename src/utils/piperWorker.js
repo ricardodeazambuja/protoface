@@ -250,11 +250,15 @@ self.onmessage = async (event) => {
                     if (url.startsWith(`${import.meta.env.BASE_URL}piper/voices/`)) {
                         const remoteUrl = `https://huggingface.co/rhasspy/piper-voices/resolve/main/${url.replace(`${import.meta.env.BASE_URL}piper/voices/`, '')}`;
                         console.log(`[Worker] Falling back to: ${remoteUrl}`);
-                        response = await fetch(remoteUrl);
+                        try {
+                            response = await fetch(remoteUrl);
+                        } catch (e) {
+                            throw new Error(`Failed to fetch ${remoteUrl}. Network might be blocked.`);
+                        }
                     }
                 }
 
-                if (!response.ok) throw new Error(`Failed to load ${url}`);
+                if (!response.ok) throw new Error(`Failed to load ${url} (Status: ${response.status})`);
 
                 // Cache the successful response
                 cache.put(url, response.clone());
