@@ -19,7 +19,7 @@ export default defineConfig({
             ]
         })
     ],
-    base: process.env.BASE_PATH || '/',
+    base: '/protoface/',
     optimizeDeps: {
         exclude: ['onnxruntime-web']
     },
