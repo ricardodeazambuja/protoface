@@ -84,6 +84,7 @@ function App() {
     // Native TTS specific controls
     const [nativePitch, setNativePitch] = useState(1.0);   // 0-2, default 1
     const [nativeVolume, setNativeVolume] = useState(1.0); // 0-1, default 1
+    const [nativeRate, setNativeRate] = useState(0.8);     // 0.5-2, default 0.8 for better sync
 
     // PWA Install Prompt
     const { canInstall, isInstalled, promptInstall } = useInstallPrompt();
@@ -110,7 +111,8 @@ function App() {
                     speakerId: speakerId,
                     lengthScale: 1.0 / animationSpeed,
                     pitch: nativePitch,
-                    volume: nativeVolume
+                    volume: nativeVolume,
+                    nativeRate: nativeRate
                 });
                 audioBufferRef.current = result;
             } catch (error) {
@@ -336,6 +338,8 @@ function App() {
                         setNativePitch={setNativePitch}
                         nativeVolume={nativeVolume}
                         setNativeVolume={setNativeVolume}
+                        nativeRate={nativeRate}
+                        setNativeRate={setNativeRate}
                     />
                 </div>
 

@@ -157,12 +157,8 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
             const segments = parseScriptSegments(script);
             window.speechSynthesis.cancel();
 
-            // Base rate from animation speed: lower lengthScale = slower speech
-            // Apply 0.8x default slowdown to better match animation timing
-            const DEFAULT_RATE_MULTIPLIER = 0.8;
-            const baseRate = baseSettings?.lengthScale
-                ? (DEFAULT_RATE_MULTIPLIER / baseSettings.lengthScale)
-                : DEFAULT_RATE_MULTIPLIER;
+            // Use nativeRate directly from settings (user controls this via Voice Speed slider)
+            const baseRate = baseSettings?.nativeRate ?? 1.0;
 
             // Helper to speak one utterance and wait for completion
             const speakSegment = (text, rate, voiceObj, pitch, volume) => {
@@ -188,14 +184,11 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
             // Process segments sequentially (don't await here, just fire and forget for animation sync)
             (async () => {
                 const selectedNativeVoice = nativeVoices.find(v => v.name === voice);
-                console.log('[Native TTS] Processing segments:', segments);
                 for (const segment of segments) {
-                    console.log('[Native TTS] Processing segment:', segment);
                     if (segment.type === 'text' && segment.text.trim()) {
                         const segmentRate = baseRate * (segment.speed || 1.0);
                         await speakSegment(segment.text, segmentRate, selectedNativeVoice, pitch, volume);
                     } else if (segment.type === 'pause' && segment.duration > 0) {
-                        console.log('[Native TTS] Pausing for', segment.duration, 'ms');
                         await delay(segment.duration);
                     }
                 }

@@ -37,7 +37,9 @@ const ScriptPanel = ({
     nativePitch,
     setNativePitch,
     nativeVolume,
-    setNativeVolume
+    setNativeVolume,
+    nativeRate,
+    setNativeRate
 }) => {
     const [showHelp, setShowHelp] = useState(false);
 
@@ -337,6 +339,20 @@ const ScriptPanel = ({
                                         step="0.1"
                                         value={nativeVolume}
                                         onChange={(e) => setNativeVolume(parseFloat(e.target.value))}
+                                        style={{ height: '4px' }}
+                                    />
+
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Voice Speed</label>
+                                        <span style={{ fontSize: '10px' }}>{nativeRate.toFixed(1)}x</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="0.5"
+                                        max="2"
+                                        step="0.1"
+                                        value={nativeRate}
+                                        onChange={(e) => setNativeRate(parseFloat(e.target.value))}
                                         style={{ height: '4px' }}
                                     />
                                 </motion.div>
