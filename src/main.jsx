@@ -3,6 +3,9 @@ import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
 
+// Build info for debugging deployments
+console.log('[ProtoFace] Build:', new Date().toISOString().split('T')[0], '| onnxruntime-web: 1.18.0');
+
 ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
         <App />
