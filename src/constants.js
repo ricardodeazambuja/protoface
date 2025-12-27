@@ -50,6 +50,10 @@ export const TTS_MODE_HOST = 'host';     // Acts as a TTS engine for remote clie
 // Communication
 export const TTS_BRIDGE_CHANNEL = 'protoface-tts-bridge';
 
+// TTS Engines
+export const TTS_ENGINE_PIPER = 'piper';
+export const TTS_ENGINE_NATIVE = 'native';
+
 // ============================================
 // Audio Analysis
 // ============================================

@@ -9,8 +9,10 @@
 
 import * as ort from 'onnxruntime-web';
 
-// Configure ONNX Runtime to load WASM files from the public directory
+// Configure ONNX Runtime
 ort.env.wasm.wasmPaths = import.meta.env.BASE_URL;
+ort.env.wasm.numThreads = 1; // Limit threads to reduce memory pressure
+ort.env.wasm.proxy = false;  // Ensure it runs in the current worker context
 
 // Constants for phoneme processing
 const BOS = "^";
@@ -20,6 +22,7 @@ const PAD = "_";
 let espeakModule = null;
 let voiceModel = null;
 let voiceConfig = null;
+let currentModelBuffer = null;
 
 /**
  * Initialize espeak-ng module
@@ -277,16 +280,28 @@ self.onmessage = async (event) => {
             self.postMessage({ type: 'progress', progress: 0.6 });
 
             // 2. Load Model
-            // ONNX Runtime Web needs a URL or Blob. Blob URL is best.
+            // Fetch as ArrayBuffer for zero-copy loading
             const modelResponse = await fetchAndCache(modelUrl);
-            const modelBlob = await modelResponse.blob();
-            const modelBlobUrl = URL.createObjectURL(modelBlob);
+            const modelBuffer = await modelResponse.arrayBuffer();
+
+            // Clean up previous model if it exists to free memory early
+            if (voiceModel) {
+                console.log('[Worker] Releasing previous model session...');
+                try { await voiceModel.release(); } catch (e) { }
+                voiceModel = null;
+            }
 
             try {
-                voiceModel = await ort.InferenceSession.create(modelBlobUrl);
+                // Pass ArrayBuffer directly to ort.InferenceSession.create
+                voiceModel = await ort.InferenceSession.create(modelBuffer, {
+                    executionProviders: ['wasm'],
+                    graphOptimizationLevel: 'all'
+                });
+                console.log('[Worker] Model loaded successfully');
             } finally {
-                // TODO: Implement proper Blob URL cleanup with tracked revocations
-                // Currently relying on browser garbage collection
+                // We keep the reference to help GC, but the buffer can be cleared 
+                // if the inference engine copied it to WASM heap
+                // Some ORT versions copy/transfer it, others reference it.
             }
 
             self.postMessage({ type: 'loaded' });

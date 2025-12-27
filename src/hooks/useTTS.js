@@ -3,11 +3,12 @@ import {
     VOICE_CATALOG_URL,
     CACHE_EXPIRY_MS,
     TTS_MODE_LOCAL,
-    TTS_MODE_REMOTE
+    TTS_MODE_REMOTE,
+    TTS_ENGINE_PIPER,
+    TTS_ENGINE_NATIVE
 } from '../constants';
 import { parseScriptSegments } from '../utils/parseScriptSegments';
 import localVoiceCatalog from '../data/voices.json';
-import { TTSBridge } from '../utils/TTSBridge';
 
 /**
  * useTTS - Custom hook for managing TTS.
@@ -29,33 +30,32 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
         } catch (e) { return []; }
     });
 
+    const [ttsEngine, setTtsEngine] = useState(TTS_ENGINE_PIPER);
+    const [nativeVoices, setNativeVoices] = useState([]);
+
     const workerRef = useRef(null);
-    const bridgeRef = useRef(null);
 
-    // Initialize Backend (Worker or Bridge)
+    // Initialize Native Voices
     useEffect(() => {
-        if (mode === TTS_MODE_LOCAL) {
-            console.log('[useTTS] Initializing Local Worker Backend');
-            workerRef.current = new Worker(new URL('../utils/piperWorker.js', import.meta.url), { type: 'module' });
+        const updateVoices = () => {
+            const voices = window.speechSynthesis.getVoices();
+            setNativeVoices(voices);
+        };
+        updateVoices();
+        window.speechSynthesis.onvoiceschanged = updateVoices;
+        return () => { window.speechSynthesis.onvoiceschanged = null; };
+    }, []);
 
-            workerRef.current.onmessage = (e) => handleBackendMessage(e.data);
-        } else if (mode === TTS_MODE_REMOTE) {
-            console.log('[useTTS] Initializing Remote Bridge Backend');
-            bridgeRef.current = new TTSBridge('client');
-
-            bridgeRef.current.onMessage((message) => {
-                const { type, payload } = message;
-                if (type && type.startsWith('response:')) {
-                    handleBackendMessage({ type: type.replace('response:', ''), ...payload });
-                }
-            });
-        }
+    // Initialize Piper Worker
+    useEffect(() => {
+        console.log('[useTTS] Initializing Local Worker Backend');
+        workerRef.current = new Worker(new URL('../utils/piperWorker.js', import.meta.url), { type: 'module' });
+        workerRef.current.onmessage = (e) => handleBackendMessage(e.data);
 
         return () => {
             if (workerRef.current) workerRef.current.terminate();
-            if (bridgeRef.current) bridgeRef.current.destroy();
         };
-    }, [mode]);
+    }, []);
 
     const handleBackendMessage = (data) => {
         const { type, progress, audio, sampling_rate, error } = data;
@@ -77,13 +77,8 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
     };
 
     const postToBackend = (message) => {
-        if (mode === TTS_MODE_LOCAL && workerRef.current) {
+        if (workerRef.current) {
             workerRef.current.postMessage(message);
-        } else if (mode === TTS_MODE_REMOTE && bridgeRef.current) {
-            bridgeRef.current.postMessage({
-                type: `request:${message.type}`,
-                payload: message
-            });
         }
     };
 
@@ -100,14 +95,22 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
     }, [ttsReady, voice, downloadedVoices]);
 
     const loadVoice = useCallback((voiceId) => {
+        setVoice(voiceId);
+        if (ttsEngine === TTS_ENGINE_NATIVE) {
+            setTtsReady(true);
+            setTtsLoading(false);
+            return;
+        }
+
         const voiceInfo = voiceCatalog[voiceId];
         setTtsLoading(true);
         setTtsReady(false);
-        setVoice(voiceId);
 
         if (voiceInfo) {
             const baseUrl = 'https://huggingface.co/rhasspy/piper-voices/resolve/main/';
-            const modelPath = Object.keys(voiceInfo.files).find(f => f.endsWith('.onnx'));
+            // Priority: Quantized then high quality
+            const modelPath = Object.keys(voiceInfo.files).find(f => f.endsWith('_q.onnx')) ||
+                Object.keys(voiceInfo.files).find(f => f.endsWith('.onnx'));
             const configPath = Object.keys(voiceInfo.files).find(f => f.endsWith('.onnx.json'));
             postToBackend({
                 type: 'load',
@@ -118,10 +121,20 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
         } else {
             postToBackend({ type: 'load', modelId: voiceId });
         }
-    }, [voiceCatalog, mode]);
+    }, [voiceCatalog, ttsEngine]);
 
     const generateSpeech = useCallback((text, settings) => {
         if (!ttsReady) return;
+
+        if (ttsEngine === TTS_ENGINE_NATIVE) {
+            const utterance = new SpeechSynthesisUtterance(text.replace(/<[^>]*>/g, ''));
+            const selectedNativeVoice = nativeVoices.find(v => v.name === voice);
+            if (selectedNativeVoice) utterance.voice = selectedNativeVoice;
+            window.speechSynthesis.speak(utterance);
+            if (onAudioResult) onAudioResult(null, 0); // Trigger animation without buffer
+            return;
+        }
+
         setTtsLoading(true);
         const cleanText = text.replace(/<[^>]*>/g, '');
         postToBackend({
@@ -129,11 +142,24 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
             text: cleanText,
             settings
         });
-    }, [ttsReady, mode]);
+    }, [ttsReady, ttsEngine, voice, nativeVoices, onAudioResult]);
 
     const generateSegmentedSpeech = useCallback(async (script, baseSettings = {}) => {
-        if (!ttsReady) {
-            throw new Error('TTS not ready');
+        if (!ttsReady) throw new Error('TTS not ready');
+
+        if (ttsEngine === TTS_ENGINE_NATIVE) {
+            // Native mode: just trigger the utterances and return null buffer
+            const segments = parseScriptSegments(script);
+            window.speechSynthesis.cancel();
+            for (const segment of segments) {
+                if (segment.type === 'text') {
+                    const utterance = new SpeechSynthesisUtterance(segment.text);
+                    const selectedNativeVoice = nativeVoices.find(v => v.name === voice);
+                    if (selectedNativeVoice) utterance.voice = selectedNativeVoice;
+                    window.speechSynthesis.speak(utterance);
+                }
+            }
+            return { audio: null, sampling_rate: 0 };
         }
 
         const segments = parseScriptSegments(script);
@@ -161,20 +187,9 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
                         };
 
                         let cleanup;
-                        if (mode === TTS_MODE_LOCAL) {
-                            const listener = (e) => handler(e.data);
-                            workerRef.current.addEventListener('message', listener);
-                            cleanup = () => workerRef.current.removeEventListener('message', listener);
-                        } else {
-                            // For remote, we listen through the bridge temporarily
-                            const originalOnMessage = bridgeRef.current.onMessageCallback;
-                            bridgeRef.current.onMessage((msg) => {
-                                if (msg.type && msg.type.startsWith('response:')) {
-                                    handler({ type: msg.type.replace('response:', ''), ...msg.payload });
-                                }
-                            });
-                            cleanup = () => bridgeRef.current.onMessage(originalOnMessage);
-                        }
+                        const listener = (e) => handler(e.data);
+                        workerRef.current.addEventListener('message', listener);
+                        cleanup = () => workerRef.current.removeEventListener('message', listener);
 
                         postToBackend({
                             type: 'speak',
@@ -205,10 +220,12 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
             setTtsLoading(false);
             throw error;
         }
-    }, [ttsReady, mode]);
+    }, [ttsReady, ttsEngine, voice, nativeVoices]);
 
     return {
         useTTS, setUseTTS,
+        ttsEngine, setTtsEngine,
+        nativeVoices,
         ttsReady, ttsLoading, ttsProgress,
         voice, voiceCatalog, downloadedVoices, catalogLoading,
         loadVoice, generateSpeech, generateSegmentedSpeech

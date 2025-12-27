@@ -11,20 +11,14 @@ import {
     DEFAULT_BACKGROUND_COLOR,
     DEFAULT_EYE_SIZE,
     DEFAULT_EYE_SPACING,
-    TTS_MODE_LOCAL,
-    TTS_MODE_REMOTE,
-    TTS_MODE_HOST
+    TTS_ENGINE_PIPER,
+    TTS_ENGINE_NATIVE
 } from './constants';
 import ParameterSidebar from './components/ParameterSidebar';
 import ScriptPanel from './components/ScriptPanel';
-import { RemoteTTSService } from './utils/RemoteTTSService';
+
 
 function App() {
-    // Determine TTS Mode from URL (e.g., ?mode=remote)
-    const urlParams = new URLSearchParams(window.location.search);
-    const ttsMode = urlParams.get('ttsMode') || TTS_MODE_LOCAL;
-    const isTtsHost = ttsMode === TTS_MODE_HOST;
-
     const [text, setText] = useState("Hello! <joy> I am happy now! <sad> But now I am sad... <shock> Oh my god! <neutral> Back to normal.");
     const [targetLook, setTargetLook] = useState(null);
 
@@ -56,15 +50,7 @@ function App() {
         playAnimation, stopAnimation, setExpression
     } = useAnimationPlayer();
 
-    // Initialize Host Service if needed
-    useEffect(() => {
-        if (isTtsHost) {
-            console.log('[App] Starting Remote TTS Host Service');
-            const service = new RemoteTTSService();
-            service.init();
-            return () => service.destroy();
-        }
-    }, [isTtsHost]);
+
 
     const {
         isRecording, lastVideoUrl,
@@ -73,6 +59,7 @@ function App() {
 
     const {
         useTTS: useTTS_enabled, setUseTTS,
+        ttsEngine, setTtsEngine, nativeVoices,
         ttsReady, ttsLoading, ttsProgress,
         voice, voiceCatalog, downloadedVoices, catalogLoading,
         loadVoice, generateSpeech, generateSegmentedSpeech
@@ -85,8 +72,7 @@ function App() {
                 handlePlay(record); // Re-trigger play with audio
             }
         },
-        (error) => alert('TTS Error: ' + error),
-        { mode: ttsMode }
+        (error) => alert('TTS Error: ' + error)
     );
 
     const [showConsent, setShowConsent] = useState(false);
@@ -102,6 +88,10 @@ function App() {
     const handlePlay = async (record = false) => {
         const shouldRecord = record === true;
         if (isAnimating || ttsLoading) return;
+
+        if (useTTS_enabled && ttsEngine === TTS_ENGINE_NATIVE && shouldRecord) {
+            alert("Recording with sound is only available for Neural (Piper) voices. Browser native voices will only record animation.");
+        }
 
         if (useTTS_enabled && !audioBufferRef.current) {
             if (!ttsReady) {
@@ -193,11 +183,6 @@ function App() {
                     <p style={{ color: 'var(--text-muted)', fontSize: '1.25rem' }}>
                         Create animated characters that speak your words.
                     </p>
-
-                    {/* TTS Mode Indicator */}
-                    <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: ttsMode === TTS_MODE_LOCAL ? 'var(--text-muted)' : 'var(--accent)' }}>
-                        Mode: {ttsMode.toUpperCase()} {isTtsHost ? '(Providing Voice)' : (ttsMode === TTS_MODE_REMOTE ? '(Using Remote Voice)' : '')}
-                    </div>
                     {/* PWA Install Button */}
                     {canInstall && (
                         <motion.button
@@ -316,7 +301,15 @@ function App() {
                         setVoiceSearch={setVoiceSearch}
                         showVoicePicker={showVoicePicker}
                         setShowVoicePicker={setShowVoicePicker}
+                        ttsEngine={ttsEngine}
+                        setTtsEngine={setTtsEngine}
+                        nativeVoices={nativeVoices}
                         onVoiceSelect={(voiceKey) => {
+                            if (ttsEngine === 'native') {
+                                loadVoice(voiceKey);
+                                setShowVoicePicker(false);
+                                return;
+                            }
                             if (downloadedVoices.includes(voiceKey)) {
                                 loadVoice(voiceKey);
                                 setShowVoicePicker(false);

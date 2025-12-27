@@ -13,6 +13,9 @@ const ScriptPanel = ({
     ttsLoading,
     useTTS_enabled,
     setUseTTS,
+    ttsEngine,
+    setTtsEngine,
+    nativeVoices,
     handlePlay,
     handleStop,
     isRecording,
@@ -159,6 +162,57 @@ const ScriptPanel = ({
 
                     {useTTS_enabled && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            {/* Engine Selection Toggle */}
+                            <div style={{
+                                display: 'flex',
+                                background: 'rgba(255,255,255,0.05)',
+                                borderRadius: '8px',
+                                padding: '4px',
+                                border: '1px solid var(--border)'
+                            }}>
+                                <button
+                                    onClick={() => setTtsEngine('piper')}
+                                    style={{
+                                        flex: 1,
+                                        padding: '6px 10px',
+                                        borderRadius: '6px',
+                                        border: 'none',
+                                        background: ttsEngine === 'piper' ? 'var(--accent)' : 'transparent',
+                                        color: ttsEngine === 'piper' ? 'white' : 'var(--text-muted)',
+                                        fontSize: '11px',
+                                        fontWeight: '600',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px'
+                                    }}
+                                >
+                                    <span>🧠 Neural</span>
+                                </button>
+                                <button
+                                    onClick={() => setTtsEngine('native')}
+                                    style={{
+                                        flex: 1,
+                                        padding: '6px 10px',
+                                        borderRadius: '6px',
+                                        border: 'none',
+                                        background: ttsEngine === 'native' ? 'var(--accent)' : 'transparent',
+                                        color: ttsEngine === 'native' ? 'white' : 'var(--text-muted)',
+                                        fontSize: '11px',
+                                        fontWeight: '600',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px'
+                                    }}
+                                >
+                                    <span>🌐 Native</span>
+                                </button>
+                            </div>
                             <div style={{ position: 'relative' }}>
                                 <button
                                     className="btn-secondary"
@@ -174,7 +228,11 @@ const ScriptPanel = ({
                                         fontSize: '12px'
                                     }}
                                 >
-                                    <span>{voice ? (voiceCatalog[voice]?.language?.name_english + " - " + voiceCatalog[voice]?.name) : "Select a voice..."}</span>
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {ttsEngine === 'native'
+                                            ? (voice || "Select native voice...")
+                                            : (voice ? (voiceCatalog[voice]?.language?.name_english + " - " + voiceCatalog[voice]?.name) : "Select neural voice...")}
+                                    </span>
                                     <motion.span animate={{ rotate: showVoicePicker ? 180 : 0 }}>▼</motion.span>
                                 </button>
 
@@ -187,6 +245,8 @@ const ScriptPanel = ({
                                             setVoiceSearch={setVoiceSearch}
                                             voice={voice}
                                             onSelect={onVoiceSelect}
+                                            ttsEngine={ttsEngine}
+                                            nativeVoices={nativeVoices}
                                         />
                                     )}
                                 </AnimatePresence>
