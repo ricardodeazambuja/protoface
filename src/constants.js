@@ -42,6 +42,14 @@ export const DEFAULT_BACKGROUND_COLOR = '#cc4444';
 export const VOICE_CATALOG_URL = 'https://huggingface.co/rhasspy/piper-voices/resolve/main/voices.json';
 export const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 
+// TTS Execution Modes
+export const TTS_MODE_LOCAL = 'local';   // Runs Piper in a local Web Worker
+export const TTS_MODE_REMOTE = 'remote'; // Requests audio from a remote Host
+export const TTS_MODE_HOST = 'host';     // Acts as a TTS engine for remote clients
+
+// Communication
+export const TTS_BRIDGE_CHANNEL = 'protoface-tts-bridge';
+
 // ============================================
 // Audio Analysis
 // ============================================

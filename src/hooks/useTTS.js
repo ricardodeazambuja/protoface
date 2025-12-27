@@ -1,13 +1,21 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { VOICE_CATALOG_URL, CACHE_EXPIRY_MS } from '../constants';
+import {
+    VOICE_CATALOG_URL,
+    CACHE_EXPIRY_MS,
+    TTS_MODE_LOCAL,
+    TTS_MODE_REMOTE
+} from '../constants';
 import { parseScriptSegments } from '../utils/parseScriptSegments';
 import localVoiceCatalog from '../data/voices.json';
+import { TTSBridge } from '../utils/TTSBridge';
 
 /**
- * useTTS - Custom hook for managing the Piper TTS Web Worker,
- * voice catalog, and model downloads.
+ * useTTS - Custom hook for managing TTS.
+ * Supports Local (Web Worker) and Remote (Bridge) backends.
  */
-export const useTTS = (onAudioResult, onError) => {
+export const useTTS = (onAudioResult, onError, options = {}) => {
+    const { mode = TTS_MODE_LOCAL } = options;
+
     const [useTTS, setUseTTS] = useState(false);
     const [ttsReady, setTtsReady] = useState(false);
     const [ttsLoading, setTtsLoading] = useState(false);
@@ -22,35 +30,64 @@ export const useTTS = (onAudioResult, onError) => {
     });
 
     const workerRef = useRef(null);
+    const bridgeRef = useRef(null);
 
-    // Initialize worker
+    // Initialize Backend (Worker or Bridge)
     useEffect(() => {
-        workerRef.current = new Worker(new URL('../utils/piperWorker.js', import.meta.url), { type: 'module' });
+        if (mode === TTS_MODE_LOCAL) {
+            console.log('[useTTS] Initializing Local Worker Backend');
+            workerRef.current = new Worker(new URL('../utils/piperWorker.js', import.meta.url), { type: 'module' });
 
-        workerRef.current.onmessage = (e) => {
-            const { type, progress, audio, sampling_rate, error } = e.data;
-            if (type === 'progress') {
-                setTtsProgress(progress);
-            } else if (type === 'loaded') {
-                setTtsReady(true);
-                setTtsLoading(false);
-                localStorage.setItem('protoface-tts-consented', 'true');
-            } else if (type === 'result') {
-                setTtsLoading(false);
-                if (onAudioResult) onAudioResult(audio, sampling_rate);
-            } else if (type === 'error') {
-                console.error('TTS Error:', error);
-                setTtsLoading(false);
-                if (onError) onError(error);
-            }
-        };
+            workerRef.current.onmessage = (e) => handleBackendMessage(e.data);
+        } else if (mode === TTS_MODE_REMOTE) {
+            console.log('[useTTS] Initializing Remote Bridge Backend');
+            bridgeRef.current = new TTSBridge('client');
+
+            bridgeRef.current.onMessage((message) => {
+                const { type, payload } = message;
+                if (type && type.startsWith('response:')) {
+                    handleBackendMessage({ type: type.replace('response:', ''), ...payload });
+                }
+            });
+        }
 
         return () => {
             if (workerRef.current) workerRef.current.terminate();
+            if (bridgeRef.current) bridgeRef.current.destroy();
         };
-    }, []); // Initial load
+    }, [mode]);
 
-    // Update the 'loaded' voice tracker when voice changes and ttsReady becomes true
+    const handleBackendMessage = (data) => {
+        const { type, progress, audio, sampling_rate, error } = data;
+
+        if (type === 'progress') {
+            setTtsProgress(progress);
+        } else if (type === 'loaded') {
+            setTtsReady(true);
+            setTtsLoading(false);
+            localStorage.setItem('protoface-tts-consented', 'true');
+        } else if (type === 'result') {
+            setTtsLoading(false);
+            if (onAudioResult) onAudioResult(audio, sampling_rate);
+        } else if (type === 'error') {
+            console.error('TTS Error:', error);
+            setTtsLoading(false);
+            if (onError) onError(error);
+        }
+    };
+
+    const postToBackend = (message) => {
+        if (mode === TTS_MODE_LOCAL && workerRef.current) {
+            workerRef.current.postMessage(message);
+        } else if (mode === TTS_MODE_REMOTE && bridgeRef.current) {
+            bridgeRef.current.postMessage({
+                type: `request:${message.type}`,
+                payload: message
+            });
+        }
+    };
+
+    // Update the 'loaded' voice tracker
     useEffect(() => {
         if (ttsReady && voice && !downloadedVoices.includes(voice)) {
             setDownloadedVoices(prev => {
@@ -72,64 +109,74 @@ export const useTTS = (onAudioResult, onError) => {
             const baseUrl = 'https://huggingface.co/rhasspy/piper-voices/resolve/main/';
             const modelPath = Object.keys(voiceInfo.files).find(f => f.endsWith('.onnx'));
             const configPath = Object.keys(voiceInfo.files).find(f => f.endsWith('.onnx.json'));
-            workerRef.current.postMessage({
+            postToBackend({
                 type: 'load',
                 voiceId: voiceId,
                 modelUrl: baseUrl + modelPath,
                 configUrl: baseUrl + configPath
             });
         } else {
-            workerRef.current.postMessage({ type: 'load', modelId: voiceId });
+            postToBackend({ type: 'load', modelId: voiceId });
         }
-    }, [voiceCatalog]);
+    }, [voiceCatalog, mode]);
 
     const generateSpeech = useCallback((text, settings) => {
-        if (!ttsReady || !workerRef.current) return;
+        if (!ttsReady) return;
         setTtsLoading(true);
         const cleanText = text.replace(/<[^>]*>/g, '');
-        workerRef.current.postMessage({
+        postToBackend({
             type: 'speak',
             text: cleanText,
             settings
         });
-    }, [ttsReady]);
+    }, [ttsReady, mode]);
 
-    /**
-     * Generate speech from script with support for pause and speed tags
-     * Returns a Promise that resolves with the concatenated audio buffer
-     */
     const generateSegmentedSpeech = useCallback(async (script, baseSettings = {}) => {
-        if (!ttsReady || !workerRef.current) {
+        if (!ttsReady) {
             throw new Error('TTS not ready');
         }
 
         const segments = parseScriptSegments(script);
         const audioChunks = [];
-        let sampleRate = 22050; // Default, will be updated from first result
+        let sampleRate = 22050;
 
         setTtsLoading(true);
 
         try {
             for (const segment of segments) {
                 if (segment.type === 'text' && segment.text.trim()) {
-                    // Generate speech for this text segment
-                    // Speed maps to lengthScale: lengthScale = 1 / speed
                     const lengthScale = 1 / segment.speed;
 
                     const audio = await new Promise((resolve, reject) => {
-                        const handler = (e) => {
-                            const { type, audio, sampling_rate, error } = e.data;
+                        const handler = (data) => {
+                            const { type, audio, sampling_rate, error } = data;
                             if (type === 'result') {
-                                workerRef.current.removeEventListener('message', handler);
+                                cleanup();
                                 sampleRate = sampling_rate;
                                 resolve(audio);
                             } else if (type === 'error') {
-                                workerRef.current.removeEventListener('message', handler);
+                                cleanup();
                                 reject(new Error(error));
                             }
                         };
-                        workerRef.current.addEventListener('message', handler);
-                        workerRef.current.postMessage({
+
+                        let cleanup;
+                        if (mode === TTS_MODE_LOCAL) {
+                            const listener = (e) => handler(e.data);
+                            workerRef.current.addEventListener('message', listener);
+                            cleanup = () => workerRef.current.removeEventListener('message', listener);
+                        } else {
+                            // For remote, we listen through the bridge temporarily
+                            const originalOnMessage = bridgeRef.current.onMessageCallback;
+                            bridgeRef.current.onMessage((msg) => {
+                                if (msg.type && msg.type.startsWith('response:')) {
+                                    handler({ type: msg.type.replace('response:', ''), ...msg.payload });
+                                }
+                            });
+                            cleanup = () => bridgeRef.current.onMessage(originalOnMessage);
+                        }
+
+                        postToBackend({
                             type: 'speak',
                             text: segment.text,
                             settings: { ...baseSettings, lengthScale }
@@ -138,15 +185,12 @@ export const useTTS = (onAudioResult, onError) => {
 
                     audioChunks.push(audio);
                 } else if (segment.type === 'pause') {
-                    // Create silence buffer
                     const silenceSamples = Math.floor((segment.duration / 1000) * sampleRate);
                     const silence = new Float32Array(silenceSamples);
                     audioChunks.push(silence);
                 }
-                // Emotion segments are visual-only, skip for audio
             }
 
-            // Concatenate all audio chunks
             const totalLength = audioChunks.reduce((acc, chunk) => acc + chunk.length, 0);
             const combinedAudio = new Float32Array(totalLength);
             let offset = 0;
@@ -161,7 +205,7 @@ export const useTTS = (onAudioResult, onError) => {
             setTtsLoading(false);
             throw error;
         }
-    }, [ttsReady]);
+    }, [ttsReady, mode]);
 
     return {
         useTTS, setUseTTS,

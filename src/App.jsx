@@ -7,11 +7,24 @@ import { useAnimationPlayer } from './hooks/useAnimationPlayer';
 import { useRecorder } from './hooks/useRecorder';
 import { useInstallPrompt } from './hooks/useInstallPrompt';
 import { emotionParams } from './utils/emotions';
-import { DEFAULT_BACKGROUND_COLOR, DEFAULT_EYE_SIZE, DEFAULT_EYE_SPACING } from './constants';
+import {
+    DEFAULT_BACKGROUND_COLOR,
+    DEFAULT_EYE_SIZE,
+    DEFAULT_EYE_SPACING,
+    TTS_MODE_LOCAL,
+    TTS_MODE_REMOTE,
+    TTS_MODE_HOST
+} from './constants';
 import ParameterSidebar from './components/ParameterSidebar';
 import ScriptPanel from './components/ScriptPanel';
+import { RemoteTTSService } from './utils/RemoteTTSService';
 
 function App() {
+    // Determine TTS Mode from URL (e.g., ?mode=remote)
+    const urlParams = new URLSearchParams(window.location.search);
+    const ttsMode = urlParams.get('ttsMode') || TTS_MODE_LOCAL;
+    const isTtsHost = ttsMode === TTS_MODE_HOST;
+
     const [text, setText] = useState("Hello! <joy> I am happy now! <sad> But now I am sad... <shock> Oh my god! <neutral> Back to normal.");
     const [targetLook, setTargetLook] = useState(null);
 
@@ -43,6 +56,16 @@ function App() {
         playAnimation, stopAnimation, setExpression
     } = useAnimationPlayer();
 
+    // Initialize Host Service if needed
+    useEffect(() => {
+        if (isTtsHost) {
+            console.log('[App] Starting Remote TTS Host Service');
+            const service = new RemoteTTSService();
+            service.init();
+            return () => service.destroy();
+        }
+    }, [isTtsHost]);
+
     const {
         isRecording, lastVideoUrl,
         startRecording, stopRecording
@@ -62,7 +85,8 @@ function App() {
                 handlePlay(record); // Re-trigger play with audio
             }
         },
-        (error) => alert('TTS Error: ' + error)
+        (error) => alert('TTS Error: ' + error),
+        { mode: ttsMode }
     );
 
     const [showConsent, setShowConsent] = useState(false);
@@ -169,6 +193,11 @@ function App() {
                     <p style={{ color: 'var(--text-muted)', fontSize: '1.25rem' }}>
                         Create animated characters that speak your words.
                     </p>
+
+                    {/* TTS Mode Indicator */}
+                    <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: ttsMode === TTS_MODE_LOCAL ? 'var(--text-muted)' : 'var(--accent)' }}>
+                        Mode: {ttsMode.toUpperCase()} {isTtsHost ? '(Providing Voice)' : (ttsMode === TTS_MODE_REMOTE ? '(Using Remote Voice)' : '')}
+                    </div>
                     {/* PWA Install Button */}
                     {canInstall && (
                         <motion.button
