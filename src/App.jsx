@@ -148,6 +148,13 @@ function App() {
         await stopRecording();
     };
 
+    // Clear voice selection and audio when switching TTS engines
+    const handleEngineChange = useCallback((newEngine) => {
+        setTtsEngine(newEngine);
+        loadVoice(null); // Clear voice selection
+        audioBufferRef.current = null; // Clear any cached audio
+    }, [setTtsEngine, loadVoice]);
+
 
     const handleTtsToggle = useCallback((checked) => {
         if (checked) {
@@ -312,7 +319,7 @@ function App() {
                         showVoicePicker={showVoicePicker}
                         setShowVoicePicker={setShowVoicePicker}
                         ttsEngine={ttsEngine}
-                        setTtsEngine={setTtsEngine}
+                        handleEngineChange={handleEngineChange}
                         nativeVoices={nativeVoices}
                         onVoiceSelect={(voiceKey) => {
                             if (ttsEngine === 'native') {

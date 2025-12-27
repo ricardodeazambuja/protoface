@@ -14,7 +14,7 @@ const ScriptPanel = ({
     useTTS_enabled,
     setUseTTS,
     ttsEngine,
-    setTtsEngine,
+    handleEngineChange,
     nativeVoices,
     handlePlay,
     handleStop,
@@ -176,7 +176,7 @@ const ScriptPanel = ({
                                 border: '1px solid var(--border)'
                             }}>
                                 <button
-                                    onClick={() => setTtsEngine('piper')}
+                                    onClick={() => handleEngineChange('piper')}
                                     style={{
                                         flex: 1,
                                         padding: '6px 10px',
@@ -197,7 +197,7 @@ const ScriptPanel = ({
                                     <span>🧠 Neural</span>
                                 </button>
                                 <button
-                                    onClick={() => setTtsEngine('native')}
+                                    onClick={() => handleEngineChange('native')}
                                     style={{
                                         flex: 1,
                                         padding: '6px 10px',
