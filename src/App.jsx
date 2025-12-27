@@ -396,6 +396,18 @@ function App() {
                     </div>
                 </div>
             )}
+
+            {/* Version badge for deployment verification */}
+            <div style={{
+                position: 'fixed',
+                bottom: '0.5rem',
+                right: '0.5rem',
+                fontSize: '10px',
+                color: 'rgba(255,255,255,0.3)',
+                fontFamily: 'monospace'
+            }}>
+                v1.18.0
+            </div>
         </div >
     );
 }
