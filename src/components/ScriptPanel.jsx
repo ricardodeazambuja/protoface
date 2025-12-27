@@ -34,7 +34,10 @@ const ScriptPanel = ({
     ttsVolatility,
     setTtsVolatility,
     ttsVariation,
-    setTtsVariation
+    nativePitch,
+    setNativePitch,
+    nativeVolume,
+    setNativeVolume
 }) => {
     const [showHelp, setShowHelp] = useState(false);
 
@@ -252,7 +255,7 @@ const ScriptPanel = ({
                                 </AnimatePresence>
                             </div>
 
-                            {ttsReady && (
+                            {ttsReady && ttsEngine !== 'native' && (
                                 <motion.div
                                     initial={{ opacity: 0, height: 0 }}
                                     animate={{ opacity: 1, height: 'auto' }}
@@ -297,6 +300,43 @@ const ScriptPanel = ({
                                         step="0.01"
                                         value={ttsVariation}
                                         onChange={(e) => setTtsVariation(parseFloat(e.target.value))}
+                                        style={{ height: '4px' }}
+                                    />
+                                </motion.div>
+                            )}
+
+                            {/* Native TTS Controls (only shown in Native mode) */}
+                            {ttsEngine === 'native' && (
+                                <motion.div
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: 'auto' }}
+                                    style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}
+                                >
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Voice Pitch</label>
+                                        <span style={{ fontSize: '10px' }}>{nativePitch.toFixed(1)}</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="0.5"
+                                        max="2"
+                                        step="0.1"
+                                        value={nativePitch}
+                                        onChange={(e) => setNativePitch(parseFloat(e.target.value))}
+                                        style={{ height: '4px' }}
+                                    />
+
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Voice Volume</label>
+                                        <span style={{ fontSize: '10px' }}>{nativeVolume.toFixed(1)}</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="1"
+                                        step="0.1"
+                                        value={nativeVolume}
+                                        onChange={(e) => setNativeVolume(parseFloat(e.target.value))}
                                         style={{ height: '4px' }}
                                     />
                                 </motion.div>

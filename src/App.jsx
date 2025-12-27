@@ -62,7 +62,7 @@ function App() {
         ttsEngine, setTtsEngine, nativeVoices,
         ttsReady, ttsLoading, ttsProgress,
         voice, voiceCatalog, downloadedVoices, catalogLoading,
-        loadVoice, generateSpeech, generateSegmentedSpeech
+        loadVoice, generateSpeech, generateSegmentedSpeech, stopSpeech
     } = useTTS(
         (audio, sampling_rate) => {
             audioBufferRef.current = { audio, sampling_rate };
@@ -81,6 +81,10 @@ function App() {
     const [ttsVariation, setTtsVariation] = useState(0.8);
     const [speakerId, setSpeakerId] = useState(0);
 
+    // Native TTS specific controls
+    const [nativePitch, setNativePitch] = useState(1.0);   // 0-2, default 1
+    const [nativeVolume, setNativeVolume] = useState(1.0); // 0-1, default 1
+
     // PWA Install Prompt
     const { canInstall, isInstalled, promptInstall } = useInstallPrompt();
 
@@ -94,7 +98,7 @@ function App() {
         }
 
         if (useTTS_enabled && !audioBufferRef.current) {
-            if (!ttsReady) {
+            if (!ttsReady && ttsEngine !== TTS_ENGINE_NATIVE) {
                 alert("Please wait for the voice model to finish loading.");
                 return;
             }
@@ -103,7 +107,10 @@ function App() {
                 const result = await generateSegmentedSpeech(text, {
                     noiseScale: ttsVolatility,
                     noiseWScale: ttsVariation,
-                    speakerId: speakerId
+                    speakerId: speakerId,
+                    lengthScale: 1.0 / animationSpeed,
+                    pitch: nativePitch,
+                    volume: nativeVolume
                 });
                 audioBufferRef.current = result;
             } catch (error) {
@@ -135,6 +142,7 @@ function App() {
 
     const handleStop = async () => {
         stopAnimation();
+        stopSpeech();
         await stopRecording();
     };
 
@@ -324,6 +332,10 @@ function App() {
                         ttsVolatility={ttsVolatility}
                         setTtsVolatility={setTtsVolatility}
                         ttsVariation={ttsVariation}
+                        nativePitch={nativePitch}
+                        setNativePitch={setNativePitch}
+                        nativeVolume={nativeVolume}
+                        setNativeVolume={setNativeVolume}
                     />
                 </div>
 

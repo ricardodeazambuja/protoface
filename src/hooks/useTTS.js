@@ -130,6 +130,11 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
             const utterance = new SpeechSynthesisUtterance(text.replace(/<[^>]*>/g, ''));
             const selectedNativeVoice = nativeVoices.find(v => v.name === voice);
             if (selectedNativeVoice) utterance.voice = selectedNativeVoice;
+
+            if (settings && settings.lengthScale) {
+                utterance.rate = Math.max(0.1, Math.min(10, 1 / settings.lengthScale));
+            }
+
             window.speechSynthesis.speak(utterance);
             if (onAudioResult) onAudioResult(null, 0); // Trigger animation without buffer
             return;
@@ -145,20 +150,57 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
     }, [ttsReady, ttsEngine, voice, nativeVoices, onAudioResult]);
 
     const generateSegmentedSpeech = useCallback(async (script, baseSettings = {}) => {
-        if (!ttsReady) throw new Error('TTS not ready');
+        if (!ttsReady && ttsEngine !== TTS_ENGINE_NATIVE) throw new Error('TTS not ready');
 
         if (ttsEngine === TTS_ENGINE_NATIVE) {
-            // Native mode: just trigger the utterances and return null buffer
+            // Native mode: trigger utterances sequentially with proper speed/pause support
             const segments = parseScriptSegments(script);
             window.speechSynthesis.cancel();
-            for (const segment of segments) {
-                if (segment.type === 'text') {
-                    const utterance = new SpeechSynthesisUtterance(segment.text);
-                    const selectedNativeVoice = nativeVoices.find(v => v.name === voice);
-                    if (selectedNativeVoice) utterance.voice = selectedNativeVoice;
+
+            // Base rate from animation speed: lower lengthScale = slower speech
+            // Apply 0.8x default slowdown to better match animation timing
+            const DEFAULT_RATE_MULTIPLIER = 0.8;
+            const baseRate = baseSettings?.lengthScale
+                ? (DEFAULT_RATE_MULTIPLIER / baseSettings.lengthScale)
+                : DEFAULT_RATE_MULTIPLIER;
+
+            // Helper to speak one utterance and wait for completion
+            const speakSegment = (text, rate, voiceObj, pitch, volume) => {
+                return new Promise((resolve) => {
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    if (voiceObj) utterance.voice = voiceObj;
+                    utterance.rate = Math.max(0.1, Math.min(10, rate));
+                    utterance.pitch = Math.max(0, Math.min(2, pitch));
+                    utterance.volume = Math.max(0, Math.min(1, volume));
+                    utterance.onend = () => resolve();
+                    utterance.onerror = () => resolve(); // Continue even on error
                     window.speechSynthesis.speak(utterance);
+                });
+            };
+
+            // Helper to wait for a duration
+            const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+            // Get pitch and volume from settings
+            const pitch = baseSettings?.pitch ?? 1.0;
+            const volume = baseSettings?.volume ?? 1.0;
+
+            // Process segments sequentially (don't await here, just fire and forget for animation sync)
+            (async () => {
+                const selectedNativeVoice = nativeVoices.find(v => v.name === voice);
+                console.log('[Native TTS] Processing segments:', segments);
+                for (const segment of segments) {
+                    console.log('[Native TTS] Processing segment:', segment);
+                    if (segment.type === 'text' && segment.text.trim()) {
+                        const segmentRate = baseRate * (segment.speed || 1.0);
+                        await speakSegment(segment.text, segmentRate, selectedNativeVoice, pitch, volume);
+                    } else if (segment.type === 'pause' && segment.duration > 0) {
+                        console.log('[Native TTS] Pausing for', segment.duration, 'ms');
+                        await delay(segment.duration);
+                    }
                 }
-            }
+            })();
+
             return { audio: null, sampling_rate: 0 };
         }
 
@@ -222,12 +264,18 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
         }
     }, [ttsReady, ttsEngine, voice, nativeVoices]);
 
+    const stopSpeech = useCallback(() => {
+        if (ttsEngine === TTS_ENGINE_NATIVE) {
+            window.speechSynthesis.cancel();
+        }
+    }, [ttsEngine]);
+
     return {
         useTTS, setUseTTS,
         ttsEngine, setTtsEngine,
         nativeVoices,
         ttsReady, ttsLoading, ttsProgress,
         voice, voiceCatalog, downloadedVoices, catalogLoading,
-        loadVoice, generateSpeech, generateSegmentedSpeech
+        loadVoice, generateSpeech, generateSegmentedSpeech, stopSpeech
     };
 };

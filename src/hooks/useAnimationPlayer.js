@@ -44,7 +44,7 @@ export const useAnimationPlayer = () => {
         let audioSource = null;
         let analyser = null;
 
-        if (audioBuffer) {
+        if (audioBuffer && audioBuffer.audio) {
             if (!audioContextRef.current) {
                 audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
             }
@@ -84,12 +84,13 @@ export const useAnimationPlayer = () => {
             .filter(item => !item.isPause)
             .reduce((acc, curr) => acc + curr.duration, 0);
 
-        const audioDuration = audioBuffer ? (audioBuffer.audio.length / audioBuffer.sampling_rate) * 1000 : 0;
+        const audioDuration = (audioBuffer && audioBuffer.audio) ? (audioBuffer.audio.length / audioBuffer.sampling_rate) * 1000 : 0;
         // Audio also includes pauses, so subtract them for speech-only comparison
         const speechAudioDuration = audioDuration - totalPauseDuration;
         const scaleFactor = speechAudioDuration > 0 && speechAnimDuration > 0
             ? speechAudioDuration / speechAnimDuration
             : 1.0;
+
 
         if (audioSource) {
             audioSource.start();
