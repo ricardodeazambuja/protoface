@@ -7,7 +7,7 @@
  * - Voice models: already cached by the worker via Cache API
  */
 
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const CACHE_NAME = `protoface-${CACHE_VERSION}`;
 
 // Assets to cache on install (app shell + TTS engine)
@@ -25,12 +25,19 @@ const PRECACHE_ASSETS = [
 ];
 
 // TTS engine assets (large files, cached separately)
+// TTS engine assets (CDN versions, fixed at specific versions)
 const TTS_ENGINE_ASSETS = [
-    './piper/espeakng.worker.data',
-    './piper/espeakng.worker.js',
-    './piper/espeakng.worker.wasm',
-    './piper/ort.min.js',
-    './piper/piper.js'
+    './piper/piper.js',
+    'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.2/dist/ort.min.mjs',
+    'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.2/dist/ort-wasm-simd-threaded.wasm',
+    'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.2/dist/ort-wasm-simd-threaded.mjs',
+    'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.2/dist/ort-wasm-simd-threaded.jsep.wasm',
+    'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.2/dist/ort-wasm-simd-threaded.jsep.mjs',
+    'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.2/dist/ort-wasm-simd-threaded.asyncify.wasm',
+    'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.2/dist/ort-wasm-simd-threaded.asyncify.mjs',
+    'https://cdn.jsdelivr.net/npm/espeak-ng@1.0.2/dist/espeak-ng.js',
+    'https://cdn.jsdelivr.net/npm/espeak-ng@1.0.2/dist/espeak-ng.wasm',
+    'https://cdn.jsdelivr.net/npm/espeak-ng@1.0.2/dist/espeakng.worker.data'
 ];
 
 // Install event - precache assets
@@ -90,8 +97,9 @@ self.addEventListener('fetch', (event) => {
     const { request } = event;
     const url = new URL(request.url);
 
-    // Only handle same-origin requests
-    if (url.origin !== self.location.origin) {
+    // Only handle same-origin or CDN requests (JSDelivr)
+    const isCDN = url.origin === 'https://cdn.jsdelivr.net' || url.origin === 'https://fastly.jsdelivr.net';
+    if (url.origin !== self.location.origin && !isCDN) {
         return;
     }
 
