@@ -1,4 +1,6 @@
-# ProtoFace 🎭
+# ProtoFace
+<img width="1259" height="946" alt="image" src="https://github.com/user-attachments/assets/498f5158-0038-4f56-a9c1-cade753b1968" />
+
 
 ProtoFace is a programmatic facial animation web application built with React and Vite. It allows users to generate expressive, phonetically-accurate facial animations from text input, featuring a dual-animation system that ranges from realistic speech to cartoonish, high-energy character performance.
 
