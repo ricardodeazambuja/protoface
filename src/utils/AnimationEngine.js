@@ -8,6 +8,7 @@ import {
     ANTICIPATION_DURATION_RATIO,
     OVERSHOOT_THRESHOLD
 } from '../constants';
+import { splitTags, parseTag } from './tagParser';
 
 export const parseTextToAnimation = (text, speed = 1, expressiveness = 0.5) => {
     const sequence = [];
@@ -39,44 +40,35 @@ export const parseTextToAnimation = (text, speed = 1, expressiveness = 0.5) => {
         return { phoneme: /[a-z]/.test(oneChar) ? phonemeMap.default : null, size: 1 };
     };
 
-    const parts = text.split(/(<[^>]+>)/g);
+    const parts = splitTags(text);
 
     let currentSpeedModifier = 1.0; // For <speed:x> tags
     let isEmphasis = false; // For <emphasis> blocks
 
     parts.forEach(part => {
-        if (part.startsWith('<') && part.endsWith('>')) {
-            const tagContent = part.slice(1, -1).toLowerCase().trim();
-
-            // Check for parameterized tags: <pause:500>, <speed:1.5>
-            const paramMatch = tagContent.match(/^(\w+):([\d.]+)$/);
-
-            if (paramMatch) {
-                const [, tagName, tagValue] = paramMatch;
-                const value = parseFloat(tagValue);
-
-                switch (tagName) {
+        const tag = parseTag(part);
+        if (tag) {
+            if (tag.isParam) {
+                switch (tag.name) {
                     case 'pause':
                         // Insert a silent pause (closed mouth)
                         sequence.push({
                             phoneme: 'closed',
-                            duration: value,
+                            duration: tag.value,
                             squash: 1.0,
                             isPause: true // Mark as pause for sync handling
                         });
                         break;
                     case 'speed':
                         // Modify speed for subsequent text
-                        currentSpeedModifier = Math.max(0.1, Math.min(5, value));
+                        currentSpeedModifier = Math.max(0.1, Math.min(5, tag.value));
                         break;
                 }
-            } else if (tagContent === 'emphasis') {
-                isEmphasis = true;
-            } else if (tagContent === '/emphasis') {
-                isEmphasis = false;
+            } else if (tag.name === 'emphasis') {
+                isEmphasis = !tag.isClosing;
             } else {
                 // Standard emotion tag
-                const emotion = tagContent;
+                const emotion = tag.name;
                 // Anticipation frame
                 if (expressiveness > 0.1) {
                     sequence.push({

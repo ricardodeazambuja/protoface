@@ -6,6 +6,14 @@
  */
 
 // ============================================
+// Animation Engine
+// ============================================
+export const BLINK_INTERVAL_MIN = 3000;
+export const BLINK_INTERVAL_VAR = 2000;
+export const LOOK_INTERVAL_MIN = 2000;
+export const LOOK_INTERVAL_VAR = 3000;
+
+// ============================================
 // Animation Timing
 // ============================================
 export const BASE_PHONEME_DURATION_MS = 140;
@@ -25,6 +33,15 @@ export const DEFAULT_EYE_SPACING = 44;
 export const MOUTH_SCALE = 15;
 export const BROW_JUMP_INTENSITY = 20;
 
+export const EYE_CENTER_X = 50;
+export const EYE_CENTER_Y = 85;
+export const MOUTH_CENTER_X = 50;
+export const MOUTH_CENTER_Y = 135;
+
+export const EYE_STROKE_WIDTH = 2.5;
+export const MOUTH_STROKE_WIDTH = 4;
+export const MOUTH_MAX_OPEN = 3.5;
+
 // ============================================
 // Recording
 // ============================================
@@ -41,6 +58,7 @@ export const DEFAULT_BACKGROUND_COLOR = '#cc4444';
 // ============================================
 export const VOICE_CATALOG_URL = 'https://huggingface.co/rhasspy/piper-voices/resolve/main/voices.json';
 export const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+export const TTS_VOLUME_MODIFIER = 1.5;
 
 // TTS Execution Modes
 export const TTS_MODE_LOCAL = 'local';   // Runs Piper in a local Web Worker

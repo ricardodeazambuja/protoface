@@ -10,7 +10,23 @@ import { motion, AnimatePresence } from 'framer-motion';
  */
 
 import { emotionParams } from '../utils/emotions';
-import { DEFAULT_EYE_SIZE, MOUTH_SCALE, BROW_JUMP_INTENSITY } from '../constants';
+import {
+    DEFAULT_EYE_SIZE,
+    MOUTH_SCALE,
+    BROW_JUMP_INTENSITY,
+    BLINK_INTERVAL_MIN,
+    BLINK_INTERVAL_VAR,
+    LOOK_INTERVAL_MIN,
+    LOOK_INTERVAL_VAR,
+    EYE_CENTER_X,
+    EYE_CENTER_Y,
+    MOUTH_CENTER_X,
+    MOUTH_CENTER_Y,
+    EYE_STROKE_WIDTH,
+    MOUTH_STROKE_WIDTH,
+    MOUTH_MAX_OPEN,
+    TTS_VOLUME_MODIFIER
+} from '../constants';
 
 const Point = (x, y) => ({ x, y });
 
@@ -61,9 +77,9 @@ const Face = ({
     // activeM calculation - modulated by phoneme and real-time volume
     // When animating, we prioritize the speech modulation (plus volume)
     // instead of clamping to the base emotion's mouth opening (m).
-    // Clamped at 3.5 to prevent extreme geometry stretching.
+    // Clamped at MOUTH_MAX_OPEN to prevent extreme geometry stretching.
     const activeM = isAnimating
-        ? Math.min(3.5, speechMod + (ttsVolume * 1.5))
+        ? Math.min(MOUTH_MAX_OPEN, speechMod + (ttsVolume * TTS_VOLUME_MODIFIER))
         : m;
 
     useEffect(() => {
@@ -71,7 +87,7 @@ const Face = ({
         const interval = setInterval(() => {
             setIsBlinking(true);
             setTimeout(() => setIsBlinking(false), 150);
-        }, 3000 + Math.random() * 2000);
+        }, BLINK_INTERVAL_MIN + Math.random() * BLINK_INTERVAL_VAR);
         return () => clearInterval(interval);
     }, [isAnimating]);
 
@@ -80,15 +96,15 @@ const Face = ({
         if (!isAnimating) { setLookDirection({ x: 0, y: 0 }); return; }
         const interval = setInterval(() => {
             setLookDirection({ x: (Math.random() - 0.5) * 1, y: (Math.random() - 0.5) * 0.5 });
-        }, 2000 + Math.random() * 3000);
+        }, LOOK_INTERVAL_MIN + Math.random() * LOOK_INTERVAL_VAR);
         return () => clearInterval(interval);
     }, [isAnimating, targetLook]);
 
     // --- Mouth Geometrical Logic ---
     const scale = MOUTH_SCALE;
     const xScale = scale * mouthScale; // Apply mouth width scaling
-    const cx = 50;
-    const cy = 135;
+    const cx = MOUTH_CENTER_X;
+    const cy = MOUTH_CENTER_Y;
 
     // Red Blob Geometry Variables
     const Ap = Point(2, (2 + activeM) * (1 - s));

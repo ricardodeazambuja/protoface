@@ -14,6 +14,7 @@
  * @typedef {{ type: 'emotion', name: string }} EmotionSegment
  * @typedef {TextSegment | PauseSegment | EmotionSegment} Segment
  */
+import { splitTags, parseTag } from './tagParser';
 
 /**
  * Parse script text into segments
@@ -25,8 +26,7 @@ export function parseScriptSegments(script) {
     let currentSpeed = 1.0;
     let currentText = '';
 
-    // Split on tags while preserving them
-    const parts = script.split(/(<[^>]+>)/g);
+    const parts = splitTags(script);
 
     const flushText = () => {
         if (currentText.trim()) {
@@ -42,33 +42,26 @@ export function parseScriptSegments(script) {
     for (const part of parts) {
         if (!part) continue;
 
-        if (part.startsWith('<') && part.endsWith('>')) {
-            const tagContent = part.slice(1, -1).toLowerCase().trim();
-
-            // Check for parameterized tags: <pause:500>, <speed:1.5>
-            const paramMatch = tagContent.match(/^(\w+):([\d.]+)$/);
-
-            if (paramMatch) {
-                const [, tagName, tagValue] = paramMatch;
-                const value = parseFloat(tagValue);
-
-                switch (tagName) {
+        const tag = parseTag(part);
+        if (tag) {
+            if (tag.isParam) {
+                switch (tag.name) {
                     case 'pause':
                         flushText();
-                        segments.push({ type: 'pause', duration: value });
+                        segments.push({ type: 'pause', duration: tag.value });
                         break;
                     case 'speed':
                         flushText();
-                        currentSpeed = Math.max(0.1, Math.min(5, value));
+                        currentSpeed = Math.max(0.1, Math.min(5, tag.value));
                         break;
                 }
-            } else if (tagContent === 'emphasis' || tagContent === '/emphasis') {
+            } else if (tag.name === 'emphasis') {
                 // Visual-only tags, don't affect TTS segments
                 // But we still need to flush text to preserve order
             } else {
                 // Emotion tag
                 flushText();
-                segments.push({ type: 'emotion', name: tagContent });
+                segments.push({ type: 'emotion', name: tag.name });
             }
         } else {
             // Regular text - accumulate
