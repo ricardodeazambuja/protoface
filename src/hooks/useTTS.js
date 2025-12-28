@@ -96,6 +96,13 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
 
     const loadVoice = useCallback((voiceId) => {
         setVoice(voiceId);
+
+        if (!voiceId) {
+            setTtsReady(false);
+            setTtsLoading(false);
+            return;
+        }
+
         if (ttsEngine === TTS_ENGINE_NATIVE) {
             setTtsReady(true);
             setTtsLoading(false);
