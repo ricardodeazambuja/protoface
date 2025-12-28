@@ -126,6 +126,15 @@ function App() {
             }
         }
 
+        // Final guard before starting animation
+        if (useTTS_enabled && isProcessing && !audioBufferRef.current) {
+            // Something cleared the buffer or isProcessing became false
+            setIsProcessing(false);
+            return;
+        }
+
+        if (!isProcessing) return;
+
         const stream = await playAnimation({
             text,
             speed: animationSpeed,

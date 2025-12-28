@@ -19,8 +19,10 @@ export const useAnimationPlayer = () => {
     const audioSourceRef = useRef(null);
     const analyserRef = useRef(null);
     const audioDestinationRef = useRef(null);
+    const stopRef = useRef(false);
 
     const stopAnimation = useCallback(() => {
+        stopRef.current = true;
         setIsAnimating(false);
         setCurrentPhoneme('closed');
         setTtsVolume(0);
@@ -39,6 +41,7 @@ export const useAnimationPlayer = () => {
         shouldRecord = false,
         onComplete = null
     }) => {
+        stopRef.current = false;
         setIsAnimating(true);
 
         let audioSource = null;
@@ -51,6 +54,7 @@ export const useAnimationPlayer = () => {
             if (audioContextRef.current.state === 'suspended') {
                 await audioContextRef.current.resume();
             }
+            if (stopRef.current) return;
 
             const { audio, sampling_rate } = audioBuffer;
             const buffer = audioContextRef.current.createBuffer(1, audio.length, sampling_rate);
@@ -109,6 +113,8 @@ export const useAnimationPlayer = () => {
 
         let index = 0;
         const playNext = () => {
+            if (stopRef.current) return;
+
             if (index >= sequence.length) {
                 stopAnimation();
                 if (onComplete) onComplete();
