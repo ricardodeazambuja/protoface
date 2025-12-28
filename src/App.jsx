@@ -443,12 +443,14 @@ function App() {
                 )}
             </AnimatePresence>
 
-            {ttsLoading && (
+            {(ttsLoading || isProcessing) && (
                 <div style={{ position: 'fixed', bottom: '2rem', left: '2rem', zIndex: 90 }}>
                     <div className="glass-panel" style={{ padding: '1rem 1.5rem', minWidth: '250px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                             <span style={{ fontSize: '13px', color: 'white' }}>
-                                {ttsReady ? 'Synthesizing...' : (downloadedVoices.includes(voice) ? 'Loading Voice...' : 'Downloading Model...')}
+                                {ttsLoading
+                                    ? (ttsReady ? 'Synthesizing...' : (downloadedVoices.includes(voice) ? 'Loading Voice...' : 'Downloading Model...'))
+                                    : 'Preparing Animation...'}
                             </span>
                             <span style={{ fontSize: '13px', color: 'var(--accent)' }}>{(ttsProgress * 100).toFixed(0)}%</span>
                         </div>
