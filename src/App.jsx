@@ -116,6 +116,7 @@ function App() {
                 });
                 audioBufferRef.current = result;
             } catch (error) {
+                if (error.name === 'AbortError') return;
                 alert('TTS Error: ' + error.message);
                 return;
             }

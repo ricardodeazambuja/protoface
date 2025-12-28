@@ -363,12 +363,12 @@ const ScriptPanel = ({
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                     <div style={{ display: 'flex', gap: '1rem' }}>
-                        {!isAnimating ? (
+                        {(!isAnimating && !ttsLoading) ? (
                             <button
                                 className="btn-primary"
                                 onClick={() => handlePlay(false)}
                                 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}
-                                disabled={ttsLoading || (useTTS_enabled && (!voice || (ttsEngine === 'piper' && !ttsReady)))}
+                                disabled={(useTTS_enabled && (!voice || (ttsEngine === 'piper' && !ttsReady)))}
                             >
                                 <Play size={20} /> Preview Animation
                             </button>

@@ -34,6 +34,7 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
     const [nativeVoices, setNativeVoices] = useState([]);
 
     const workerRef = useRef(null);
+    const abortControllerRef = useRef(null);
 
     // Initialize Native Voices
     useEffect(() => {
@@ -159,6 +160,13 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
     const generateSegmentedSpeech = useCallback(async (script, baseSettings = {}) => {
         if (!ttsReady && ttsEngine !== TTS_ENGINE_NATIVE) throw new Error('TTS not ready');
 
+        // Cancel any pending generation
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
+        abortControllerRef.current = new AbortController();
+        const { signal } = abortControllerRef.current;
+
         if (ttsEngine === TTS_ENGINE_NATIVE) {
             // Native mode: trigger utterances sequentially with proper speed/pause support
             const segments = parseScriptSegments(script);
@@ -212,6 +220,8 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
 
         try {
             for (const segment of segments) {
+                if (signal.aborted) throw new DOMException('Speech generation aborted', 'AbortError');
+
                 if (segment.type === 'text' && segment.text.trim()) {
                     const lengthScale = 1 / segment.speed;
 
@@ -257,9 +267,11 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
             }
 
             setTtsLoading(false);
+            abortControllerRef.current = null;
             return { audio: combinedAudio, sampling_rate: sampleRate };
         } catch (error) {
             setTtsLoading(false);
+            abortControllerRef.current = null;
             throw error;
         }
     }, [ttsReady, ttsEngine, voice, nativeVoices]);
@@ -267,6 +279,10 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
     const stopSpeech = useCallback(() => {
         if (ttsEngine === TTS_ENGINE_NATIVE) {
             window.speechSynthesis.cancel();
+        }
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
         }
     }, [ttsEngine]);
 
