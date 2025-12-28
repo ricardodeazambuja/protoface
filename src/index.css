@@ -98,9 +98,16 @@ input:checked + .slider:before {
   transition: all 0.2s ease;
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.btn-primary:disabled {
+  background: #333;
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .btn-secondary {
@@ -114,9 +121,16 @@ input:checked + .slider:before {
   transition: all 0.2s ease;
 }
 
-.btn-secondary:hover {
+.btn-secondary:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.05);
   border-color: var(--text-muted);
+}
+
+.btn-secondary:disabled {
+  border-style: dashed;
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 h1, h2, h3 {

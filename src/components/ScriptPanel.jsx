@@ -391,9 +391,11 @@ const ScriptPanel = ({
                         <motion.div
                             initial={{ opacity: 0, y: -5 }}
                             animate={{ opacity: 1, y: 0 }}
-                            style={{ textAlign: 'center', fontSize: '11px', color: 'var(--accent)', fontWeight: '500' }}
+                            style={{ textAlign: 'center', fontSize: '11px', color: 'var(--accent)', fontWeight: '500', lineHeight: '1.4' }}
                         >
-                            {!voice ? "↑ Please select a voice to enable playback" : "Loading engine and voice components..."}
+                            {!voice
+                                ? <>↑ Please select a voice to enable playback,<br />or <strong>disable voice output</strong> to preview animation only.</>
+                                : "Loading engine and voice components..."}
                         </motion.div>
                     )}
                 </div>
