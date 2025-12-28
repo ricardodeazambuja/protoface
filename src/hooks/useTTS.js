@@ -35,6 +35,7 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
 
     const workerRef = useRef(null);
     const abortControllerRef = useRef(null);
+    const requestIdRef = useRef(0);
 
     // Initialize Native Voices
     useEffect(() => {
@@ -122,12 +123,17 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
             const configPath = Object.keys(voiceInfo.files).find(f => f.endsWith('.onnx.json'));
             postToBackend({
                 type: 'load',
+                requestId: ++requestIdRef.current,
                 voiceId: voiceId,
                 modelUrl: baseUrl + modelPath,
                 configUrl: baseUrl + configPath
             });
         } else {
-            postToBackend({ type: 'load', modelId: voiceId });
+            postToBackend({
+                type: 'load',
+                requestId: ++requestIdRef.current,
+                modelId: voiceId
+            });
         }
     }, [voiceCatalog, ttsEngine]);
 
@@ -150,8 +156,29 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
 
         setTtsLoading(true);
         const cleanText = text.replace(/<[^>]*>/g, '');
+        const currentRequestId = ++requestIdRef.current;
+
+        const handler = (data) => {
+            const { type, audio, sampling_rate, error, requestId } = data;
+            if (requestId !== currentRequestId) return;
+
+            if (type === 'result') {
+                workerRef.current.removeEventListener('message', listener);
+                setTtsLoading(false);
+                if (onAudioResult) onAudioResult(audio, sampling_rate);
+            } else if (type === 'error') {
+                workerRef.current.removeEventListener('message', listener);
+                setTtsLoading(false);
+                console.error('TTS Generation Error:', error);
+                if (onError) onError(error);
+            }
+        };
+        const listener = (e) => handler(e.data);
+        workerRef.current.addEventListener('message', listener);
+
         postToBackend({
             type: 'speak',
+            requestId: currentRequestId,
             text: cleanText,
             settings
         });
@@ -216,6 +243,7 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
         const audioChunks = [];
         let sampleRate = 22050;
 
+        const currentRequestId = ++requestIdRef.current;
         setTtsLoading(true);
 
         try {
@@ -226,8 +254,11 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
                     const lengthScale = 1 / segment.speed;
 
                     const audio = await new Promise((resolve, reject) => {
+                        let cleanup;
                         const handler = (data) => {
-                            const { type, audio, sampling_rate, error } = data;
+                            const { type, audio, sampling_rate, error, requestId } = data;
+                            if (requestId !== currentRequestId) return; // Skip old request results
+
                             if (type === 'result') {
                                 cleanup();
                                 sampleRate = sampling_rate;
@@ -238,13 +269,24 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
                             }
                         };
 
-                        let cleanup;
                         const listener = (e) => handler(e.data);
+
+                        // Add abort listener to clean up if aborted while waiting
+                        const onAbort = () => {
+                            cleanup();
+                            reject(new DOMException('Speech generation aborted', 'AbortError'));
+                        };
+                        signal.addEventListener('abort', onAbort);
+
                         workerRef.current.addEventListener('message', listener);
-                        cleanup = () => workerRef.current.removeEventListener('message', listener);
+                        cleanup = () => {
+                            workerRef.current.removeEventListener('message', listener);
+                            signal.removeEventListener('abort', onAbort);
+                        };
 
                         postToBackend({
                             type: 'speak',
+                            requestId: currentRequestId,
                             text: segment.text,
                             settings: { ...baseSettings, lengthScale }
                         });

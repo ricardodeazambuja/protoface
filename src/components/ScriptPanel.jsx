@@ -29,6 +29,7 @@ const ScriptPanel = ({
     showVoicePicker,
     setShowVoicePicker,
     onVoiceSelect,
+    isProcessing,
     ttsRate,
     setTtsRate,
     ttsVolatility,
@@ -363,7 +364,7 @@ const ScriptPanel = ({
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                     <div style={{ display: 'flex', gap: '1rem' }}>
-                        {(!isAnimating && !ttsLoading) ? (
+                        {(!isAnimating && !ttsLoading && !isProcessing) ? (
                             <button
                                 className="btn-primary"
                                 onClick={() => handlePlay(false)}

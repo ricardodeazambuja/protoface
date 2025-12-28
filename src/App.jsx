@@ -25,6 +25,7 @@ function App() {
     // Initial manual params (based on neutral)
     const [manualParams, setManualParams] = useState([0.5, 0.0, 0.0, 0.5, 0.8, 0.0, 0.0, 0.0, 0.0]);
     const [isManualMode, setIsManualMode] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
 
     const [backgroundImage, setBackgroundImage] = useState(null);
     const [backgroundColor, setBackgroundColor] = useState(DEFAULT_BACKGROUND_COLOR);
@@ -92,7 +93,9 @@ function App() {
     // Helper functions defined before they are used in startPlayback/useEffect
     const handlePlay = async (record = false) => {
         const shouldRecord = record === true;
-        if (isAnimating || ttsLoading) return;
+        if (isAnimating || ttsLoading || isProcessing) return;
+
+        setIsProcessing(true);
 
         if (useTTS_enabled && ttsEngine === TTS_ENGINE_NATIVE && shouldRecord) {
             alert("Recording with sound is only available for Neural (Piper) voices. Browser native voices will only record animation.");
@@ -116,6 +119,7 @@ function App() {
                 });
                 audioBufferRef.current = result;
             } catch (error) {
+                setIsProcessing(false);
                 if (error.name === 'AbortError') return;
                 alert('TTS Error: ' + error.message);
                 return;
@@ -139,11 +143,13 @@ function App() {
             await startRecording(stream);
         }
 
+        setIsProcessing(false);
         // Reset audio buffer after start
         audioBufferRef.current = null;
     };
 
     const handleStop = async () => {
+        setIsProcessing(false);
         stopAnimation();
         stopSpeech();
         await stopRecording();
@@ -312,6 +318,7 @@ function App() {
                         isRecording={isRecording}
                         lastVideoUrl={lastVideoUrl}
                         ttsReady={ttsReady}
+                        isProcessing={isProcessing}
                         voice={voice}
                         voiceCatalog={voiceCatalog}
                         downloadedVoices={downloadedVoices}

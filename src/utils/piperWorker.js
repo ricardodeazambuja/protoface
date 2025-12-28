@@ -282,18 +282,19 @@ self.onmessage = async (event) => {
                 graphOptimizationLevel: 'all'
             });
 
-            self.postMessage({ type: 'loaded' });
+            self.postMessage({ type: 'loaded', requestId: event.data.requestId });
         }
         else if (type === 'speak') {
             const result = await synthesize(text, event.data.settings);
             self.postMessage({
                 type: 'result',
+                requestId: event.data.requestId,
                 audio: result.audio,
                 sampling_rate: result.sampling_rate
             });
         }
     } catch (error) {
         console.error('Piper Worker Error:', error);
-        self.postMessage({ type: 'error', error: error.message });
+        self.postMessage({ type: 'error', error: error.message, requestId: event.data.requestId });
     }
 };
