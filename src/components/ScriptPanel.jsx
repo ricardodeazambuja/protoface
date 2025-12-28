@@ -153,7 +153,7 @@ const ScriptPanel = ({
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <Settings2 size={16} style={{ color: 'var(--accent)' }} />
-                            <label className="input-label" style={{ marginBottom: 0 }}>Voice Settings</label>
+                            <label className="input-label" style={{ marginBottom: 0 }}>Enable Voice Output</label>
                         </div>
                         <label className="switch">
                             <input
@@ -361,24 +361,41 @@ const ScriptPanel = ({
                     )}
                 </div>
 
-                <div style={{ display: 'flex', gap: '1rem' }}>
-                    {!isAnimating ? (
-                        <button className="btn-primary" onClick={() => handlePlay(false)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }} disabled={ttsLoading}>
-                            <Play size={20} /> Preview Animation
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', gap: '1rem' }}>
+                        {!isAnimating ? (
+                            <button
+                                className="btn-primary"
+                                onClick={() => handlePlay(false)}
+                                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}
+                                disabled={ttsLoading || (useTTS_enabled && (!voice || (ttsEngine === 'piper' && !ttsReady)))}
+                            >
+                                <Play size={20} /> Preview Animation
+                            </button>
+                        ) : (
+                            <button className="btn-secondary" onClick={handleStop} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, color: '#ef4444' }}>
+                                <Square size={20} /> Stop
+                            </button>
+                        )}
+                        <button
+                            className="btn-secondary"
+                            onClick={() => handlePlay(true)}
+                            disabled={isAnimating || ttsLoading || (useTTS_enabled && (!voice || (ttsEngine === 'piper' && !ttsReady)))}
+                            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: (isAnimating || ttsLoading || (useTTS_enabled && (!voice || (ttsEngine === 'piper' && !ttsReady)))) ? 0.5 : 1, flex: 1 }}
+                        >
+                            <Download size={20} /> {isRecording ? 'Recording...' : 'Export Video'}
                         </button>
-                    ) : (
-                        <button className="btn-secondary" onClick={handleStop} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, color: '#ef4444' }}>
-                            <Square size={20} /> Stop
-                        </button>
+                    </div>
+
+                    {(useTTS_enabled && (!voice || (ttsEngine === 'piper' && !ttsReady))) && (
+                        <motion.div
+                            initial={{ opacity: 0, y: -5 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            style={{ textAlign: 'center', fontSize: '11px', color: 'var(--accent)', fontWeight: '500' }}
+                        >
+                            {!voice ? "↑ Please select a voice to enable playback" : "Loading engine and voice components..."}
+                        </motion.div>
                     )}
-                    <button
-                        className="btn-secondary"
-                        onClick={() => handlePlay(true)}
-                        disabled={isAnimating}
-                        style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: isAnimating ? 0.5 : 1, flex: 1 }}
-                    >
-                        <Download size={20} /> {isRecording ? 'Recording...' : 'Export Video'}
-                    </button>
                 </div>
 
                 {lastVideoUrl && !isAnimating && (
