@@ -126,7 +126,7 @@ async function textToFloat32Audio(
   }
 
   const results = await voiceModel.run(feeds);
-  const float32Audio = results.output.cpuData;
+  const float32Audio = results.output.data;
 
   return float32Audio;
 }

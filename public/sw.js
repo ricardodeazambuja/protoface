@@ -7,7 +7,7 @@
  * - Voice models: already cached by the worker via Cache API
  */
 
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const CACHE_NAME = `protoface-${CACHE_VERSION}`;
 
 // Assets to cache on install (app shell + TTS engine)
@@ -30,7 +30,13 @@ const TTS_ENGINE_ASSETS = [
     './piper/espeakng.worker.js',
     './piper/espeakng.worker.wasm',
     './piper/ort.min.js',
-    './piper/piper.js'
+    './piper/piper.js',
+    './ort-wasm-simd-threaded.wasm',
+    './ort-wasm-simd-threaded.mjs',
+    './ort-wasm-simd-threaded.jsep.wasm',
+    './ort-wasm-simd-threaded.jsep.mjs',
+    './ort-wasm-simd-threaded.asyncify.wasm',
+    './ort-wasm-simd-threaded.asyncify.mjs'
 ];
 
 // Install event - precache assets

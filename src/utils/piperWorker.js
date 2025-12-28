@@ -1,3 +1,12 @@
+// Polyfill for document to prevent ReferenceError in onnxruntime-web 1.20+
+if (typeof document === 'undefined') {
+    globalThis.document = {
+        createElement: () => ({ setAttribute: () => { }, style: {} }),
+        getElementsByTagName: () => [],
+        currentScript: { src: '' }
+    };
+}
+
 /**
  * piperWorker.js - Native Piper TTS Worker
  * 
@@ -160,7 +169,7 @@ async function runModel(phonemeIds, config, settings = {}) {
     }
 
     const results = await voiceModel.run(feeds);
-    return results.output.cpuData;
+    return results.output.data;
 }
 
 /**

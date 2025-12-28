@@ -451,7 +451,7 @@ function App() {
                 color: 'rgba(255,255,255,0.3)',
                 fontFamily: 'monospace'
             }}>
-                v1.18.0
+                v1.23.2
             </div>
         </div >
     );
