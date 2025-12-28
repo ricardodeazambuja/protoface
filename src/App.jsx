@@ -26,6 +26,12 @@ function App() {
     const [manualParams, setManualParams] = useState([0.5, 0.0, 0.0, 0.5, 0.8, 0.0, 0.0, 0.0, 0.0]);
     const [isManualMode, setIsManualMode] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+    const isProcessingRef = useRef(false);
+
+    const setProcessing = (val) => {
+        setIsProcessing(val);
+        isProcessingRef.current = val;
+    };
 
     const [backgroundImage, setBackgroundImage] = useState(null);
     const [backgroundColor, setBackgroundColor] = useState(DEFAULT_BACKGROUND_COLOR);
@@ -93,9 +99,9 @@ function App() {
     // Helper functions defined before they are used in startPlayback/useEffect
     const handlePlay = async (record = false) => {
         const shouldRecord = record === true;
-        if (isAnimating || ttsLoading || isProcessing) return;
+        if (isAnimating || ttsLoading || isProcessingRef.current) return;
 
-        setIsProcessing(true);
+        setProcessing(true);
 
         if (useTTS_enabled && ttsEngine === TTS_ENGINE_NATIVE && shouldRecord) {
             alert("Recording with sound is only available for Neural (Piper) voices. Browser native voices will only record animation.");
@@ -104,6 +110,7 @@ function App() {
         if (useTTS_enabled && !audioBufferRef.current) {
             if (!ttsReady && ttsEngine !== TTS_ENGINE_NATIVE) {
                 alert("Please wait for the voice model to finish loading.");
+                setProcessing(false);
                 return;
             }
             // Use segmented speech generation for script tag support
@@ -119,21 +126,17 @@ function App() {
                 });
                 audioBufferRef.current = result;
             } catch (error) {
-                setIsProcessing(false);
+                setProcessing(false);
                 if (error.name === 'AbortError') return;
                 alert('TTS Error: ' + error.message);
                 return;
             }
         }
 
-        // Final guard before starting animation
-        if (useTTS_enabled && isProcessing && !audioBufferRef.current) {
-            // Something cleared the buffer or isProcessing became false
-            setIsProcessing(false);
+        // Final guard before starting animation: check if we were stopped during synthesis
+        if (!isProcessingRef.current) {
             return;
         }
-
-        if (!isProcessing) return;
 
         const stream = await playAnimation({
             text,
@@ -152,13 +155,13 @@ function App() {
             await startRecording(stream);
         }
 
-        setIsProcessing(false);
+        setProcessing(false);
         // Reset audio buffer after start
         audioBufferRef.current = null;
     };
 
     const handleStop = async () => {
-        setIsProcessing(false);
+        setProcessing(false);
         stopAnimation();
         stopSpeech();
         await stopRecording();
@@ -203,7 +206,7 @@ function App() {
 
 
     return (
-        <div className="container">
+        <div className="container" >
             <header style={{ marginBottom: '3rem', textAlign: 'center' }}>
                 <motion.div
                     initial={{ opacity: 0, y: -20 }}
