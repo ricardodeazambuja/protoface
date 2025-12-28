@@ -11,15 +11,16 @@ if (typeof document === 'undefined') {
  * piperWorker.js - Native Piper TTS Worker
  * 
  * Uses:
- * - espeak-ng for phonemization (loaded from public/)
- * - onnxruntime-web for running the Piper ONNX model
+ * - espeak-ng for phonemization (loaded from CDN)
+ * - onnxruntime-web for running the Piper ONNX model (loaded from CDN)
  * - Voice models from HuggingFace (rhasspy/piper-voices)
  */
 
-import * as ort from 'onnxruntime-web';
+// Load ONNX Runtime from CDN as ES Module
+import * as ort from 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.2/dist/ort.min.mjs';
 
-// Configure ONNX Runtime
-ort.env.wasm.wasmPaths = import.meta.env.BASE_URL;
+// Configure ONNX Runtime to load WASM/MJS from CDN
+ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.2/dist/';
 ort.env.wasm.numThreads = 1; // Limit threads to reduce memory pressure
 ort.env.wasm.proxy = false;  // Ensure it runs in the current worker context
 
@@ -31,7 +32,32 @@ const PAD = "_";
 let espeakModule = null;
 let voiceModel = null;
 let voiceConfig = null;
-let currentModelBuffer = null;
+
+const ESPEAK_NG_JS_URL = 'https://cdn.jsdelivr.net/npm/espeak-ng@1.0.2/dist/espeak-ng.js';
+const ESPEAK_NG_WASM_URL = 'https://cdn.jsdelivr.net/npm/espeak-ng@1.0.2/dist/espeak-ng.wasm';
+const ESPEAK_NG_DATA_URL = 'https://cdn.jsdelivr.net/npm/espeak-ng@1.0.2/dist/espeakng.worker.data';
+
+/**
+ * Helper to load legacy eSpeak-ng script in a module worker
+ * 
+ * NOTE: The script contains `import.meta.url` and `export default`, which cause
+ * SyntaxErrors when executed via `new Function`. We strip/replace them.
+ */
+async function loadESpeakNGScript() {
+    if (globalThis.ESpeakNG) return;
+    console.log('[Worker] Loading eSpeak-ng from CDN...');
+    const res = await fetch(ESPEAK_NG_JS_URL);
+    let code = await res.text();
+
+    // Replace import.meta.url with a hardcoded string
+    code = code.replace(/import\.meta\.url/g, `'${ESPEAK_NG_JS_URL}'`);
+
+    // Strip "export default ESpeakNG;" to allow evaluation as plain script
+    code = code.replace(/export\s+default\s+ESpeakNG\s*;/g, '');
+
+    // Wrap and execute to expose the global
+    (new Function(code + '\nglobalThis.ESpeakNG = ESpeakNG;'))();
+}
 
 /**
  * Initialize espeak-ng module
@@ -39,15 +65,16 @@ let currentModelBuffer = null;
 async function initEspeak() {
     if (espeakModule) return espeakModule;
 
-    // Import espeak-ng from local src directory
-    const ESpeakNG = (await import('./espeak/espeak-ng.js')).default;
+    await loadESpeakNGScript();
 
-    espeakModule = await ESpeakNG({
+    if (typeof globalThis.ESpeakNG === 'undefined') {
+        throw new Error('ESpeakNG not found after script execution.');
+    }
+
+    espeakModule = await globalThis.ESpeakNG({
         locateFile: (path) => {
-            // Ensure WASM files are loaded from the same directory
-            if (path.endsWith('.wasm')) {
-                return new URL('./espeak/espeak-ng.wasm', import.meta.url).href;
-            }
+            if (path.endsWith('.wasm')) return ESPEAK_NG_WASM_URL;
+            if (path.endsWith('.data')) return ESPEAK_NG_DATA_URL;
             return path;
         }
     });
@@ -57,18 +84,18 @@ async function initEspeak() {
 
 /**
  * Convert text to phonemes using espeak-ng
- * The npm espeak-ng package requires creating a new instance with arguments
  */
 async function textToPhonemes(text, voice = 'en-us') {
-    // Import ESpeakNG fresh for each conversion
-    // The npm package expects arguments passed to the constructor
-    const ESpeakNG = (await import('./espeak/espeak-ng.js')).default;
+    await loadESpeakNGScript();
+
+    if (typeof globalThis.ESpeakNG === 'undefined') {
+        throw new Error('ESpeakNG not found for phoneme generation.');
+    }
 
     const outFile = 'phonemes.txt';
 
     try {
-        // Create an instance with espeak arguments
-        const espeak = await ESpeakNG({
+        const espeak = await globalThis.ESpeakNG({
             arguments: [
                 '--phonout', outFile,
                 '--sep=""',
@@ -79,9 +106,8 @@ async function textToPhonemes(text, voice = 'en-us') {
                 `"${text}"`
             ],
             locateFile: (path) => {
-                if (path.endsWith('.wasm')) {
-                    return new URL('./espeak/espeak-ng.wasm', import.meta.url).href;
-                }
+                if (path.endsWith('.wasm')) return ESPEAK_NG_WASM_URL;
+                if (path.endsWith('.data')) return ESPEAK_NG_DATA_URL;
                 return path;
             }
         });
@@ -207,117 +233,59 @@ async function synthesize(text, settings = {}) {
 // Message handler
 self.onmessage = async (event) => {
     const { type, text, voiceId, modelId } = event.data;
-    const voice = voiceId || modelId;
 
     try {
         if (type === 'load') {
             const { modelUrl: customModelUrl, configUrl: customConfigUrl, voiceId } = event.data;
-
-            // Priority:
-            // 1. Explicitly passed custom URLs
-            // 2. Local fallback (/piper/voices/...)
-            // 3. Remote fallback (Hugging Face)
 
             let modelUrl = customModelUrl;
             let configUrl = customConfigUrl;
 
             if (!modelUrl || !configUrl) {
                 const voice = voiceId || modelId;
-                // Try local first
                 modelUrl = `${import.meta.env.BASE_URL}piper/voices/${voice}/model.onnx`;
                 configUrl = `${import.meta.env.BASE_URL}piper/voices/${voice}/model.json`;
             }
 
             self.postMessage({ type: 'progress', progress: 0.1 });
 
-            // Helper: Fetch with Cache API
             const fetchAndCache = async (url) => {
                 const cache = await caches.open('protoface-piper-models');
                 const cachedResponse = await cache.match(url);
+                if (cachedResponse) return cachedResponse;
 
-                if (cachedResponse) {
-                    console.log(`[Worker] Serving from cache: ${url}`);
-                    return cachedResponse;
-                }
-
-                console.log(`[Worker] Fetching remote: ${url}`);
-
-                // Try fetching
-                let response;
-                try {
-                    response = await fetch(url);
-                } catch (e) {
-                    // If simple fetch fails, try fallback for relative paths
-                    if (url.startsWith(`${import.meta.env.BASE_URL}piper/voices/`)) {
-                        console.warn(`[Worker] Local fetch failed for ${url}, trying remote fallback...`);
-                        // Fallback logic: Assuming we can construct a remote URL
-                        // This is tricky because the worker doesn't strictly know the mapping.
-                        throw e;
-                    }
-                    throw e;
-                }
-
-                if (!response.ok) {
-                    // Attempt remote fallback if local 404s
-                    if (url.startsWith(`${import.meta.env.BASE_URL}piper/voices/`)) {
-                        const remoteUrl = `https://huggingface.co/rhasspy/piper-voices/resolve/main/${url.replace(`${import.meta.env.BASE_URL}piper/voices/`, '')}`;
-                        console.log(`[Worker] Falling back to: ${remoteUrl}`);
-                        try {
-                            response = await fetch(remoteUrl);
-                        } catch (e) {
-                            throw new Error(`Failed to fetch ${remoteUrl}. Network might be blocked.`);
-                        }
-                    }
-                }
-
+                const response = await fetch(url);
                 if (!response.ok) throw new Error(`Failed to load ${url} (Status: ${response.status})`);
-
-                // Cache the successful response
                 cache.put(url, response.clone());
                 return response;
             };
 
-            // 1. Load Config
             const configResponse = await fetchAndCache(configUrl);
             voiceConfig = await configResponse.json();
 
             self.postMessage({ type: 'progress', progress: 0.3 });
 
-            // Initialize espeak
             await initEspeak();
 
             self.postMessage({ type: 'progress', progress: 0.6 });
 
-            // 2. Load Model
-            // Fetch as ArrayBuffer for zero-copy loading
             const modelResponse = await fetchAndCache(modelUrl);
             const modelBuffer = await modelResponse.arrayBuffer();
 
-            // Clean up previous model if it exists to free memory early
             if (voiceModel) {
-                console.log('[Worker] Releasing previous model session...');
                 try { await voiceModel.release(); } catch (e) { }
                 voiceModel = null;
             }
 
-            try {
-                // Pass ArrayBuffer directly to ort.InferenceSession.create
-                voiceModel = await ort.InferenceSession.create(modelBuffer, {
-                    executionProviders: ['wasm'],
-                    graphOptimizationLevel: 'all'
-                });
-                console.log('[Worker] Model loaded successfully');
-            } finally {
-                // We keep the reference to help GC, but the buffer can be cleared 
-                // if the inference engine copied it to WASM heap
-                // Some ORT versions copy/transfer it, others reference it.
-            }
+            voiceModel = await ort.InferenceSession.create(modelBuffer, {
+                executionProviders: ['wasm'],
+                graphOptimizationLevel: 'all'
+            });
 
             self.postMessage({ type: 'loaded' });
         }
         else if (type === 'speak') {
             const result = await synthesize(text, event.data.settings);
-
             self.postMessage({
                 type: 'result',
                 audio: result.audio,
