@@ -195,6 +195,17 @@ async function runModel(phonemeIds, config, settings = {}) {
     }
 
     const results = await voiceModel.run(feeds);
+
+    // Dispose input tensors only (not output) to free some WASM memory
+    try {
+        phonemeIdsTensor.dispose?.();
+        phonemeLengthsTensor.dispose?.();
+        scalesTensor.dispose?.();
+        if (feeds['sid']) feeds['sid'].dispose?.();
+    } catch (e) {
+        // dispose might not exist in all ONNX versions
+    }
+
     return results.output.data;
 }
 
@@ -202,19 +213,27 @@ async function runModel(phonemeIds, config, settings = {}) {
  * Main synthesis function
  */
 async function synthesize(text, settings = {}) {
+    console.log('[Worker] synthesize() called, text length:', text.length);
+
     if (!voiceConfig || !voiceModel) {
         throw new Error('Voice not loaded');
     }
 
     const espeakVoice = voiceConfig.espeak?.voice || 'en-us';
+    console.log('[Worker] Generating phonemes for voice:', espeakVoice);
     const phonemes = await textToPhonemes(text, espeakVoice);
+    console.log('[Worker] Phonemes generated:', phonemes.length);
 
     if (phonemes.length === 0) {
         throw new Error('Failed to generate phonemes');
     }
 
     const phonemeIds = phonemesToIds(voiceConfig.phoneme_id_map, phonemes);
+    console.log('[Worker] Phoneme IDs:', phonemeIds.length);
+
+    console.log('[Worker] Running ONNX model...');
     const audioData = await runModel(phonemeIds, voiceConfig, settings);
+    console.log('[Worker] ONNX complete, audio samples:', audioData.length);
 
     // Debug: Check audio amplitude
     let max = 0;
@@ -222,7 +241,7 @@ async function synthesize(text, settings = {}) {
         const abs = Math.abs(audioData[i]);
         if (abs > max) max = abs;
     }
-    console.log("Synthesis complete. Max amplitude (first 5k samples):", max);
+    console.log("[Worker] Max amplitude (first 5k samples):", max);
 
     return {
         audio: audioData,

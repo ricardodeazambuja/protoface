@@ -10,6 +10,29 @@ import {
 import { parseScriptSegments } from '../utils/parseScriptSegments';
 import localVoiceCatalog from '../data/voices.json';
 
+// Module-level singleton worker to prevent StrictMode from creating duplicates
+let sharedWorker = null;
+let workerRefCount = 0;
+
+function getSharedWorker() {
+    if (!sharedWorker) {
+        console.log('[useTTS] Creating shared worker (singleton)');
+        sharedWorker = new Worker(new URL('../utils/piperWorker.js', import.meta.url), { type: 'module' });
+    }
+    workerRefCount++;
+    return sharedWorker;
+}
+
+function releaseSharedWorker() {
+    workerRefCount--;
+    if (workerRefCount <= 0 && sharedWorker) {
+        console.log('[useTTS] Terminating shared worker');
+        sharedWorker.terminate();
+        sharedWorker = null;
+        workerRefCount = 0;
+    }
+}
+
 /**
  * useTTS - Custom hook for managing TTS.
  * Supports Local (Web Worker) and Remote (Bridge) backends.
@@ -48,14 +71,13 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
         return () => { window.speechSynthesis.onvoiceschanged = null; };
     }, []);
 
-    // Initialize Piper Worker
+    // Initialize Piper Worker (singleton to prevent StrictMode double-init)
     useEffect(() => {
-        console.log('[useTTS] Initializing Local Worker Backend');
-        workerRef.current = new Worker(new URL('../utils/piperWorker.js', import.meta.url), { type: 'module' });
+        workerRef.current = getSharedWorker();
         workerRef.current.onmessage = (e) => handleBackendMessage(e.data);
 
         return () => {
-            if (workerRef.current) workerRef.current.terminate();
+            releaseSharedWorker();
         };
     }, []);
 
@@ -245,12 +267,15 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
 
         const currentRequestId = ++requestIdRef.current;
         setTtsLoading(true);
+        console.log('[useTTS] Starting segmented speech generation, segments:', segments.length);
 
         try {
+            let segmentIndex = 0;
             for (const segment of segments) {
                 if (signal.aborted) throw new DOMException('Speech generation aborted', 'AbortError');
 
                 if (segment.type === 'text' && segment.text.trim()) {
+                    console.log('[useTTS] Processing segment', segmentIndex, '/', segments.length, '- text:', segment.text.substring(0, 20) + '...');
                     const lengthScale = 1 / segment.speed;
 
                     const audio = await new Promise((resolve, reject) => {
@@ -260,10 +285,12 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
                             if (requestId !== currentRequestId) return; // Skip old request results
 
                             if (type === 'result') {
+                                console.log('[useTTS] Segment', segmentIndex, 'complete, audio samples:', audio?.length);
                                 cleanup();
                                 sampleRate = sampling_rate;
                                 resolve(audio);
                             } else if (type === 'error') {
+                                console.log('[useTTS] Segment', segmentIndex, 'ERROR:', error);
                                 cleanup();
                                 reject(new Error(error));
                             }
@@ -284,6 +311,7 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
                             signal.removeEventListener('abort', onAbort);
                         };
 
+                        console.log('[useTTS] Sending segment', segmentIndex, 'to worker...');
                         postToBackend({
                             type: 'speak',
                             requestId: currentRequestId,
@@ -294,10 +322,12 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
 
                     audioChunks.push(audio);
                 } else if (segment.type === 'pause') {
+                    console.log('[useTTS] Processing pause segment:', segment.duration, 'ms');
                     const silenceSamples = Math.floor((segment.duration / 1000) * sampleRate);
                     const silence = new Float32Array(silenceSamples);
                     audioChunks.push(silence);
                 }
+                segmentIndex++;
             }
 
             const totalLength = audioChunks.reduce((acc, chunk) => acc + chunk.length, 0);
@@ -309,6 +339,8 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
             }
             // Clear chunks to allow garbage collection - critical for iOS memory
             audioChunks.length = 0;
+
+            console.log('[useTTS] Speech generation complete, audio length:', combinedAudio.length, 'samples');
 
             setTtsLoading(false);
             abortControllerRef.current = null;

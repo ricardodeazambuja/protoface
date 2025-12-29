@@ -22,8 +22,6 @@ ProtoFace is a programmatic facial animation web application built with React an
 - **📱 Responsive Design**: Optimized layout for both desktop and mobile/vertical screens.
 - **📲 Installable PWA**: Install as a native-like app on desktop and mobile with offline support.
 
-> ⚠️ **iOS Note**: Neural TTS (Piper) may have memory limitations on older iOS devices. If you experience crashes, try using the Native TTS option instead.
-
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -33,8 +31,8 @@ ProtoFace is a programmatic facial animation web application built with React an
 ### Installation
 1. Clone the repository:
    ```bash
-   git clone https://github.com/ricardodeazambuja/protoface.git
-   cd protoface
+   git clone <your-repo-url>
+   cd FaceProgrammaticAnimation
    ```
 2. Install dependencies:
    ```bash

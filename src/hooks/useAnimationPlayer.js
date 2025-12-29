@@ -48,6 +48,7 @@ export const useAnimationPlayer = () => {
         let analyser = null;
 
         if (audioBuffer && audioBuffer.audio) {
+            console.log('[AnimPlayer] Creating AudioContext, audio length:', audioBuffer.audio.length);
             if (!audioContextRef.current) {
                 audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
             }
@@ -57,8 +58,11 @@ export const useAnimationPlayer = () => {
             if (stopRef.current) return;
 
             const { audio, sampling_rate } = audioBuffer;
+            console.log('[AnimPlayer] Creating audio buffer, samples:', audio.length, 'rate:', sampling_rate);
             const buffer = audioContextRef.current.createBuffer(1, audio.length, sampling_rate);
+            console.log('[AnimPlayer] Copying audio data to buffer...');
             buffer.getChannelData(0).set(audio);
+            console.log('[AnimPlayer] Audio buffer ready');
 
             audioSource = audioContextRef.current.createBufferSource();
             audioSource.buffer = buffer;
@@ -95,9 +99,10 @@ export const useAnimationPlayer = () => {
             ? speechAudioDuration / speechAnimDuration
             : 1.0;
 
-
         if (audioSource) {
+            console.log('[AnimPlayer] Starting audio playback...');
             audioSource.start();
+            console.log('[AnimPlayer] Audio started');
         }
 
         // Volume analysis loop
