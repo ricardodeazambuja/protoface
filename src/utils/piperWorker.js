@@ -286,12 +286,13 @@ self.onmessage = async (event) => {
         }
         else if (type === 'speak') {
             const result = await synthesize(text, event.data.settings);
+            // Use Transferable to move buffer ownership (zero-copy) - critical for iOS memory
             self.postMessage({
                 type: 'result',
                 requestId: event.data.requestId,
                 audio: result.audio,
                 sampling_rate: result.sampling_rate
-            });
+            }, [result.audio.buffer]);
         }
     } catch (error) {
         console.error('Piper Worker Error:', error);

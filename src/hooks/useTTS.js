@@ -307,6 +307,8 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
                 combinedAudio.set(chunk, offset);
                 offset += chunk.length;
             }
+            // Clear chunks to allow garbage collection - critical for iOS memory
+            audioChunks.length = 0;
 
             setTtsLoading(false);
             abortControllerRef.current = null;
