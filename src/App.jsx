@@ -60,7 +60,7 @@ function App() {
 
 
     const {
-        isRecording, lastVideoUrl,
+        isRecording, lastVideoUrl, lastVideoExt,
         startRecording, stopRecording
     } = useRecorder('face-capture-area');
 
@@ -102,62 +102,68 @@ function App() {
         if (isAnimating || ttsLoading || isProcessingRef.current) return;
 
         setProcessing(true);
-
-        if (useTTS_enabled && ttsEngine === TTS_ENGINE_NATIVE && shouldRecord) {
-            alert("Recording with sound is only available for Neural (Piper) voices. Browser native voices will only record animation.");
-        }
-
-        if (useTTS_enabled && !audioBufferRef.current) {
-            if (!ttsReady && ttsEngine !== TTS_ENGINE_NATIVE) {
-                alert("Please wait for the voice model to finish loading.");
-                setProcessing(false);
-                return;
+        try {
+            if (useTTS_enabled && ttsEngine === TTS_ENGINE_NATIVE && shouldRecord) {
+                alert("Recording with sound is only available for Neural (Piper) voices. Browser native voices will only record animation.");
             }
-            // Use segmented speech generation for script tag support
-            try {
-                const result = await generateSegmentedSpeech(text, {
-                    noiseScale: ttsVolatility,
-                    noiseWScale: ttsVariation,
-                    speakerId: speakerId,
-                    lengthScale: 1.0 / animationSpeed,
-                    pitch: nativePitch,
-                    volume: nativeVolume,
-                    nativeRate: nativeRate
-                });
-                audioBufferRef.current = result;
-            } catch (error) {
-                setProcessing(false);
-                if (error.name === 'AbortError') return;
-                alert('TTS Error: ' + error.message);
-                return;
-            }
-        }
 
-        // Final guard before starting animation: check if we were stopped during synthesis
-        if (!isProcessingRef.current) {
-            return;
-        }
-
-        const stream = await playAnimation({
-            text,
-            speed: animationSpeed,
-            expressiveness,
-            audioBuffer: audioBufferRef.current,
-            shouldRecord,
-            onComplete: async () => {
-                if (shouldRecord) {
-                    await stopRecording();
+            if (useTTS_enabled && !audioBufferRef.current) {
+                if (!ttsReady && ttsEngine !== TTS_ENGINE_NATIVE) {
+                    alert("Please wait for the voice model to finish loading.");
+                    return;
+                }
+                // Use segmented speech generation for script tag support
+                try {
+                    const result = await generateSegmentedSpeech(text, {
+                        noiseScale: ttsVolatility,
+                        noiseWScale: ttsVariation,
+                        speakerId: speakerId,
+                        lengthScale: 1.0 / animationSpeed,
+                        pitch: nativePitch,
+                        volume: nativeVolume,
+                        nativeRate: nativeRate
+                    });
+                    audioBufferRef.current = result;
+                } catch (error) {
+                    if (error.name === 'AbortError') return;
+                    alert('TTS Error: ' + error.message);
+                    return;
                 }
             }
-        });
 
-        if (shouldRecord) {
-            await startRecording(stream);
+            // Final guard before starting animation: check if we were stopped during synthesis
+            if (!isProcessingRef.current) {
+                return;
+            }
+
+            const stream = await playAnimation({
+                text,
+                speed: animationSpeed,
+                expressiveness,
+                audioBuffer: audioBufferRef.current,
+                shouldRecord,
+                onComplete: async () => {
+                    if (shouldRecord) {
+                        await stopRecording();
+                    }
+                }
+            });
+
+            if (shouldRecord) {
+                try {
+                    await startRecording(stream);
+                } catch (err) {
+                    // Recording unavailable (e.g. no supported format);
+                    // let the animation continue as a plain preview.
+                    alert('Video recording is not available: ' + err.message);
+                }
+            }
+        } finally {
+            setProcessing(false);
+            // The buffer is single-use: consumed by playAnimation above, or
+            // stale if we bailed out early (stopped/aborted mid-synthesis).
+            audioBufferRef.current = null;
         }
-
-        setProcessing(false);
-        // Reset audio buffer after start
-        audioBufferRef.current = null;
     };
 
     const handleStop = async () => {
@@ -329,6 +335,7 @@ function App() {
                         handleStop={handleStop}
                         isRecording={isRecording}
                         lastVideoUrl={lastVideoUrl}
+                        lastVideoExt={lastVideoExt}
                         ttsReady={ttsReady}
                         isProcessing={isProcessing}
                         voice={voice}

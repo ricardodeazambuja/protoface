@@ -1,6 +1,24 @@
 import html2canvas from 'html2canvas';
 import { RECORDING_FPS, STOP_TIMEOUT_MS, DEFAULT_BACKGROUND_COLOR } from '../constants';
 
+// Ordered by preference: MP4 first (plays natively on iOS and is easier to
+// share), WebM as fallback for browsers without MP4 recording support.
+// iOS Safari only supports fragmented MP4 (H.264/AAC) and throws
+// NotSupportedError for anything else, so this list must be probed with
+// isTypeSupported() rather than hardcoded.
+const RECORDING_MIME_CANDIDATES = [
+    'video/mp4;codecs="avc1.42E01E,mp4a.40.2"',
+    'video/mp4',
+    'video/webm;codecs=vp9',
+    'video/webm;codecs=vp8',
+    'video/webm'
+];
+
+export function pickRecordingMimeType() {
+    if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) return null;
+    return RECORDING_MIME_CANDIDATES.find(t => MediaRecorder.isTypeSupported(t)) || null;
+}
+
 export class AnimationRecorder {
     constructor(elementId) {
         this.elementId = elementId;
@@ -25,6 +43,12 @@ export class AnimationRecorder {
         this.offscreenCanvas.width = rect.width;
         this.offscreenCanvas.height = rect.height;
 
+        const mimeType = pickRecordingMimeType();
+        if (!mimeType) {
+            throw new Error('Video recording is not supported in this browser.');
+        }
+        this.containerType = mimeType.split(';')[0];
+
         this.chunks = [];
         this.stream = this.canvas.captureStream(RECORDING_FPS);
 
@@ -34,9 +58,7 @@ export class AnimationRecorder {
             });
         }
 
-        this.mediaRecorder = new MediaRecorder(this.stream, {
-            mimeType: 'video/webm;codecs=vp9'
-        });
+        this.mediaRecorder = new MediaRecorder(this.stream, { mimeType });
 
         this.mediaRecorder.ondataavailable = (e) => {
             if (e.data.size > 0) this.chunks.push(e.data);
@@ -216,16 +238,17 @@ export class AnimationRecorder {
                 return;
             }
 
+            const blobType = this.containerType || 'video/webm';
             const timeout = setTimeout(() => {
                 console.warn("MediaRecorder stop timed out, forcing resolution");
-                const blob = new Blob(this.chunks, { type: 'video/webm' });
+                const blob = new Blob(this.chunks, { type: blobType });
                 this.cleanup();
                 resolve(blob);
             }, STOP_TIMEOUT_MS);
 
             this.mediaRecorder.onstop = () => {
                 clearTimeout(timeout);
-                const blob = new Blob(this.chunks, { type: 'video/webm' });
+                const blob = new Blob(this.chunks, { type: blobType });
                 this.cleanup();
                 resolve(blob);
             };

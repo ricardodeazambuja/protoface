@@ -20,6 +20,7 @@ const ScriptPanel = ({
     handleStop,
     isRecording,
     lastVideoUrl,
+    lastVideoExt,
     ttsReady,
     voice,
     voiceCatalog,
@@ -406,7 +407,7 @@ const ScriptPanel = ({
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         href={lastVideoUrl}
-                        download={`protoface-${Date.now()}.webm`}
+                        download={`protoface-${Date.now()}.${lastVideoExt || 'webm'}`}
                         className="btn-secondary"
                         style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', background: 'rgba(34, 197, 94, 0.1)', borderColor: '#22c55e', color: '#4ade80', textDecoration: 'none' }}
                     >
