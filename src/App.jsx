@@ -48,7 +48,6 @@ function App() {
 
     const canvasRef = useRef(null);
     const audioBufferRef = useRef(null);
-    const pendingPlayRef = useRef(null);
 
     // Animation & Recording Hooks
     const {
@@ -71,14 +70,11 @@ function App() {
         voice, voiceCatalog, downloadedVoices, catalogLoading,
         loadVoice, generateSpeech, generateSegmentedSpeech, stopSpeech
     } = useTTS(
-        (audio, sampling_rate) => {
-            audioBufferRef.current = { audio, sampling_rate };
-            if (pendingPlayRef.current) {
-                const { record } = pendingPlayRef.current;
-                pendingPlayRef.current = null;
-                handlePlay(record); // Re-trigger play with audio
-            }
-        },
+        // No audio-result callback: storing per-segment worker results here
+        // let a Stop mid-synthesis leave a stale fragment in audioBufferRef,
+        // which the next Play would use instead of re-synthesizing.
+        // generateSegmentedSpeech returns the full audio directly.
+        null,
         (error) => alert('TTS Error: ' + error)
     );
 
@@ -170,6 +166,7 @@ function App() {
         setProcessing(false);
         stopAnimation();
         stopSpeech();
+        audioBufferRef.current = null;
         await stopRecording();
     };
 
