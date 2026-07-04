@@ -9,6 +9,7 @@ module.exports = {
     ],
     ignorePatterns: ['dist', 'public'],
     parserOptions: { ecmaVersion: 'latest', sourceType: 'module' },
+    globals: { __APP_VERSION__: 'readonly' },
     settings: { react: { version: 'detect' } },
     plugins: ['react-refresh'],
     rules: {
