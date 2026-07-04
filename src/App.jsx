@@ -315,84 +315,42 @@ function App() {
                     </div>
 
                     <ScriptPanel
-                        text={text}
-                        setText={setText}
-                        isAnimating={isAnimating}
-                        ttsLoading={ttsLoading}
-                        useTTS_enabled={useTTS_enabled}
-                        setUseTTS={setUseTTS}
-                        handlePlay={handlePlay}
-                        handleStop={handleStop}
-                        isRecording={isRecording}
-                        lastVideoUrl={lastVideoUrl}
-                        lastVideoExt={lastVideoExt}
-                        ttsReady={ttsReady}
-                        isProcessing={isProcessing}
-                        voice={voice}
-                        voiceCatalog={voiceCatalog}
-                        downloadedVoices={downloadedVoices}
-                        voiceSearch={voiceSearch}
-                        setVoiceSearch={setVoiceSearch}
-                        showVoicePicker={showVoicePicker}
-                        setShowVoicePicker={setShowVoicePicker}
-                        ttsEngine={ttsEngine}
-                        handleEngineChange={handleEngineChange}
-                        nativeVoices={nativeVoices}
-                        onVoiceSelect={(voiceKey) => {
-                            if (ttsEngine === 'native') {
-                                loadVoice(voiceKey);
-                                setShowVoicePicker(false);
-                                return;
-                            }
-                            if (downloadedVoices.includes(voiceKey)) {
-                                loadVoice(voiceKey);
-                                setShowVoicePicker(false);
-                            } else {
-                                setPendingVoice(voiceKey);
-                                setShowConsent(true);
-                                setShowVoicePicker(false);
+                        script={{ text, setText }}
+                        playback={{
+                            isAnimating, ttsLoading, isProcessing, isRecording, ttsReady,
+                            handlePlay, handleStop, lastVideoUrl, lastVideoExt
+                        }}
+                        voiceControl={{
+                            useTTS_enabled, setUseTTS, ttsEngine, handleEngineChange, nativeVoices,
+                            voice, voiceCatalog, downloadedVoices,
+                            voiceSearch, setVoiceSearch, showVoicePicker, setShowVoicePicker,
+                            onVoiceSelect: (voiceKey) => {
+                                if (ttsEngine === 'native') {
+                                    loadVoice(voiceKey);
+                                    setShowVoicePicker(false);
+                                    return;
+                                }
+                                if (downloadedVoices.includes(voiceKey)) {
+                                    loadVoice(voiceKey);
+                                    setShowVoicePicker(false);
+                                } else {
+                                    setPendingVoice(voiceKey);
+                                    setShowConsent(true);
+                                    setShowVoicePicker(false);
+                                }
                             }
                         }}
-                        ttsRate={ttsRate}
-                        setTtsRate={setTtsRate}
-                        ttsVolatility={ttsVolatility}
-                        setTtsVolatility={setTtsVolatility}
-                        ttsVariation={ttsVariation}
-                        setTtsVariation={setTtsVariation}
-                        nativePitch={nativePitch}
-                        setNativePitch={setNativePitch}
-                        nativeVolume={nativeVolume}
-                        setNativeVolume={setNativeVolume}
-                        nativeRate={nativeRate}
-                        setNativeRate={setNativeRate}
+                        piperSettings={{ ttsRate, setTtsRate, ttsVolatility, setTtsVolatility, ttsVariation, setTtsVariation }}
+                        nativeSettings={{ nativePitch, setNativePitch, nativeVolume, setNativeVolume, nativeRate, setNativeRate }}
                     />
                 </div>
 
                 <ParameterSidebar
-                    backgroundImage={backgroundImage}
-                    setBackgroundImage={setBackgroundImage}
-                    backgroundColor={backgroundColor}
-                    setBackgroundColor={setBackgroundColor}
-                    isManualMode={isManualMode}
-                    setIsManualMode={setIsManualMode}
-                    expression={expression}
-                    setExpression={setExpression}
-                    manualParams={manualParams}
-                    setManualParams={setManualParams}
-                    eyeSpacing={eyeSpacing}
-                    setEyeSpacing={setEyeSpacing}
-                    eyeSize={eyeSize}
-                    setEyeSize={setEyeSize}
-                    mouthScale={mouthScale}
-                    setMouthScale={setMouthScale}
-                    teethGap={teethGap}
-                    setTeethGap={setTeethGap}
-                    faceTransform={faceTransform}
-                    handleTransformChange={handleTransformChange}
-                    animationSpeed={animationSpeed}
-                    setAnimationSpeed={setAnimationSpeed}
-                    expressiveness={expressiveness}
-                    setExpressiveness={setExpressiveness}
+                    background={{ backgroundImage, setBackgroundImage, backgroundColor, setBackgroundColor }}
+                    manual={{ isManualMode, setIsManualMode, expression, setExpression, manualParams, setManualParams }}
+                    face={{ eyeSpacing, setEyeSpacing, eyeSize, setEyeSize, mouthScale, setMouthScale, teethGap, setTeethGap }}
+                    transform={{ faceTransform, handleTransformChange }}
+                    animation={{ animationSpeed, setAnimationSpeed, expressiveness, setExpressiveness }}
                 />
             </main>
 

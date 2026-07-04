@@ -5,45 +5,28 @@ import VoicePicker from './VoicePicker';
 
 /**
  * ScriptPanel - The primary interface for entering text and controlling playback.
+ *
+ * Props are grouped by concern:
+ * - script:         the text being animated
+ * - playback:       play/stop/record state and actions
+ * - voiceControl:   engine + voice selection state
+ * - piperSettings:  neural (Piper) voice tuning
+ * - nativeSettings: browser speechSynthesis tuning
  */
-const ScriptPanel = ({
-    text,
-    setText,
-    isAnimating,
-    ttsLoading,
-    useTTS_enabled,
-    setUseTTS,
-    ttsEngine,
-    handleEngineChange,
-    nativeVoices,
-    handlePlay,
-    handleStop,
-    isRecording,
-    lastVideoUrl,
-    lastVideoExt,
-    ttsReady,
-    voice,
-    voiceCatalog,
-    downloadedVoices,
-    voiceSearch,
-    setVoiceSearch,
-    showVoicePicker,
-    setShowVoicePicker,
-    onVoiceSelect,
-    isProcessing,
-    ttsRate,
-    setTtsRate,
-    ttsVolatility,
-    setTtsVolatility,
-    ttsVariation,
-    setTtsVariation,
-    nativePitch,
-    setNativePitch,
-    nativeVolume,
-    setNativeVolume,
-    nativeRate,
-    setNativeRate
-}) => {
+const ScriptPanel = ({ script, playback, voiceControl, piperSettings, nativeSettings }) => {
+    const { text, setText } = script;
+    const {
+        isAnimating, ttsLoading, isProcessing, isRecording, ttsReady,
+        handlePlay, handleStop, lastVideoUrl, lastVideoExt
+    } = playback;
+    const {
+        useTTS_enabled, setUseTTS, ttsEngine, handleEngineChange, nativeVoices,
+        voice, voiceCatalog, downloadedVoices,
+        voiceSearch, setVoiceSearch, showVoicePicker, setShowVoicePicker, onVoiceSelect
+    } = voiceControl;
+    const { ttsRate, setTtsRate, ttsVolatility, setTtsVolatility, ttsVariation, setTtsVariation } = piperSettings;
+    const { nativePitch, setNativePitch, nativeVolume, setNativeVolume, nativeRate, setNativeRate } = nativeSettings;
+
     const [showHelp, setShowHelp] = useState(false);
 
     return (

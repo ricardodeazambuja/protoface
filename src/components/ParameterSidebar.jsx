@@ -6,33 +6,21 @@ import { emotionParams } from '../utils/emotions';
 
 /**
  * ParameterSidebar - Controls for face customization, background, and movement.
+ *
+ * Props are grouped by concern:
+ * - background: canvas background image/color
+ * - manual:     emotion presets and manual parameter mode
+ * - face:       facial feature geometry (per-character in the future)
+ * - transform:  face position/scale/rotation
+ * - animation:  playback speed and expressiveness
  */
-const ParameterSidebar = ({
-    backgroundImage,
-    setBackgroundImage,
-    backgroundColor,
-    setBackgroundColor,
-    isManualMode,
-    setIsManualMode,
-    expression,
-    setExpression,
-    manualParams,
-    setManualParams,
-    eyeSpacing,
-    setEyeSpacing,
-    eyeSize,
-    setEyeSize,
-    mouthScale,
-    setMouthScale,
-    teethGap,
-    setTeethGap,
-    faceTransform,
-    handleTransformChange,
-    animationSpeed,
-    setAnimationSpeed,
-    expressiveness,
-    setExpressiveness
-}) => {
+const ParameterSidebar = ({ background, manual, face, transform, animation }) => {
+    const { backgroundImage, setBackgroundImage, backgroundColor, setBackgroundColor } = background;
+    const { isManualMode, setIsManualMode, expression, setExpression, manualParams, setManualParams } = manual;
+    const { eyeSpacing, setEyeSpacing, eyeSize, setEyeSize, mouthScale, setMouthScale, teethGap, setTeethGap } = face;
+    const { faceTransform, handleTransformChange } = transform;
+    const { animationSpeed, setAnimationSpeed, expressiveness, setExpressiveness } = animation;
+
     return (
         <aside className="sidebar">
             <BackgroundManager
