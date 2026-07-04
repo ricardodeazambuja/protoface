@@ -179,3 +179,40 @@ Cache version is controlled via `CACHE_NAME` in `sw.js`. On activation:
 - Old cache versions are automatically deleted
 - New assets are precached
 - `skipWaiting()` and `clients.claim()` ensure immediate activation
+
+---
+
+## 🌐 Platform Compatibility
+
+### Pinned Library Versions
+
+The TTS worker (`src/utils/piperWorker.js`) uses pinned CDN versions for stability:
+
+| Library | Version | Purpose |
+|---------|---------|---------|
+| `onnxruntime-web` | 1.23.2 | ONNX model inference (WASM) |
+| `espeak-ng` | 1.0.2 | Phoneme generation |
+
+### iOS Safari Limitations
+
+> ⚠️ **Memory Constraints**: iOS Safari has stricter WASM memory limits compared to desktop browsers. On older iOS devices (e.g., iPhone SE 2nd gen), Neural TTS may crash during audio preparation due to memory duplication.
+
+**Mitigations Applied:**
+- Single-threaded WASM execution (`numThreads = 1`)
+- Transferable audio buffers to reduce memory copying
+
+**User Workaround**: Use **Native TTS** on iOS devices if Neural TTS crashes.
+
+### Video Recording Formats
+
+iOS Safari's `MediaRecorder` only encodes fragmented MP4 (H.264/AAC) and
+throws `NotSupportedError` for WebM. The recorder probes
+`MediaRecorder.isTypeSupported()` and picks the first supported format
+(MP4 preferred, WebM fallback); the download extension follows the actual
+container.
+
+### Debug Logging
+
+Detailed play/synthesis tracing is disabled by default. Enable it on any
+device with `localStorage.setItem('protoface-debug', '1')` in the console,
+then reload.
