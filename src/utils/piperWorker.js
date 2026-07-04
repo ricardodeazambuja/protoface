@@ -300,7 +300,7 @@ self.onmessage = async (event) => {
             const modelBuffer = await modelResponse.arrayBuffer();
 
             if (voiceModel) {
-                try { await voiceModel.release(); } catch (e) { }
+                try { await voiceModel.release(); } catch (e) { /* session already released */ }
                 voiceModel = null;
             }
 

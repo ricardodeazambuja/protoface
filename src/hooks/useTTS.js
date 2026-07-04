@@ -1,9 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
-    VOICE_CATALOG_URL,
-    CACHE_EXPIRY_MS,
-    TTS_MODE_LOCAL,
-    TTS_MODE_REMOTE,
     TTS_ENGINE_PIPER,
     TTS_ENGINE_NATIVE
 } from '../constants';
@@ -38,18 +34,15 @@ function releaseSharedWorker() {
 
 /**
  * useTTS - Custom hook for managing TTS.
- * Supports Local (Web Worker) and Remote (Bridge) backends.
+ * Supports the Piper Web Worker and the browser's native speechSynthesis.
  */
-export const useTTS = (onError, options = {}) => {
-    const { mode = TTS_MODE_LOCAL } = options;
-
+export const useTTS = (onError) => {
     const [useTTS, setUseTTS] = useState(false);
     const [ttsReady, setTtsReady] = useState(false);
     const [ttsLoading, setTtsLoading] = useState(false);
     const [ttsProgress, setTtsProgress] = useState(0);
     const [voice, setVoice] = useState('');
-    const [voiceCatalog, setVoiceCatalog] = useState(localVoiceCatalog);
-    const [catalogLoading, setCatalogLoading] = useState(false);
+    const voiceCatalog = localVoiceCatalog;
     const [downloadedVoices, setDownloadedVoices] = useState(() => {
         try {
             return JSON.parse(localStorage.getItem('protoface-downloaded-voices') || '[]');
@@ -74,10 +67,13 @@ export const useTTS = (onError, options = {}) => {
         return () => { window.speechSynthesis.onvoiceschanged = null; };
     }, []);
 
-    // Initialize Piper Worker (singleton to prevent StrictMode double-init)
+    // Initialize Piper Worker (singleton to prevent StrictMode double-init).
+    // onmessage goes through a ref so it always sees the latest handler
+    // (and its latest onError) without re-subscribing on every render.
+    const handleBackendMessageRef = useRef(null);
     useEffect(() => {
         workerRef.current = getSharedWorker();
-        workerRef.current.onmessage = (e) => handleBackendMessage(e.data);
+        workerRef.current.onmessage = (e) => handleBackendMessageRef.current?.(e.data);
 
         return () => {
             releaseSharedWorker();
@@ -101,6 +97,7 @@ export const useTTS = (onError, options = {}) => {
             if (onError) onError(error);
         }
     };
+    handleBackendMessageRef.current = handleBackendMessage;
 
     const postToBackend = (message) => {
         if (workerRef.current) {
@@ -329,7 +326,7 @@ export const useTTS = (onError, options = {}) => {
         ttsEngine, setTtsEngine,
         nativeVoices,
         ttsReady, ttsLoading, ttsProgress,
-        voice, voiceCatalog, downloadedVoices, catalogLoading,
+        voice, voiceCatalog, downloadedVoices,
         loadVoice, generateSegmentedSpeech, stopSpeech
     };
 };

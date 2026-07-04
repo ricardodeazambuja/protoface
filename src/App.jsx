@@ -67,7 +67,7 @@ function App() {
         useTTS: useTTS_enabled, setUseTTS,
         ttsEngine, setTtsEngine, nativeVoices,
         ttsReady, ttsLoading, ttsProgress,
-        voice, voiceCatalog, downloadedVoices, catalogLoading,
+        voice, voiceCatalog, downloadedVoices,
         loadVoice, generateSegmentedSpeech, stopSpeech
     } = useTTS((error) => alert('TTS Error: ' + error));
 

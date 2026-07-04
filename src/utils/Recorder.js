@@ -80,7 +80,6 @@ export class AnimationRecorder {
         const element = document.getElementById(this.elementId);
         if (element) {
             try {
-                const elementRect = element.getBoundingClientRect();
                 this.offscreenCtx.save();
 
                 // 1. Draw the Background Color

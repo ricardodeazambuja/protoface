@@ -29,7 +29,7 @@ export const useAnimationPlayer = () => {
         setTtsVolume(0);
         if (animationRef.current) clearTimeout(animationRef.current);
         if (audioSourceRef.current) {
-            try { audioSourceRef.current.stop(); } catch (e) { }
+            try { audioSourceRef.current.stop(); } catch (e) { /* already stopped */ }
             audioSourceRef.current = null;
         }
     }, []);
