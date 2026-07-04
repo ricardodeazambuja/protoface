@@ -36,6 +36,7 @@ const ScriptPanel = ({
     ttsVolatility,
     setTtsVolatility,
     ttsVariation,
+    setTtsVariation,
     nativePitch,
     setNativePitch,
     nativeVolume,

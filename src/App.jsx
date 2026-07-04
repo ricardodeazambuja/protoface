@@ -365,6 +365,7 @@ function App() {
                         ttsVolatility={ttsVolatility}
                         setTtsVolatility={setTtsVolatility}
                         ttsVariation={ttsVariation}
+                        setTtsVariation={setTtsVariation}
                         nativePitch={nativePitch}
                         setNativePitch={setNativePitch}
                         nativeVolume={nativeVolume}
