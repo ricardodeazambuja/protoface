@@ -43,6 +43,21 @@ export class AnimationRecorder {
         this.offscreenCanvas.width = rect.width;
         this.offscreenCanvas.height = rect.height;
 
+        // Decode the background once; the capture loop runs at RECORDING_FPS
+        // and must not re-fetch/re-decode the image on every frame.
+        const style = window.getComputedStyle(element);
+        this.bgColor = style.backgroundColor || DEFAULT_BACKGROUND_COLOR;
+        this.bgImage = null;
+        if (style.backgroundImage && style.backgroundImage !== 'none') {
+            const url = style.backgroundImage.slice(4, -1).replace(/"/g, "");
+            this.bgImage = await new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = () => resolve(null);
+                img.src = url;
+            });
+        }
+
         const mimeType = pickRecordingMimeType();
         if (!mimeType) {
             throw new Error('Video recording is not supported in this browser.');
@@ -83,39 +98,29 @@ export class AnimationRecorder {
                 this.offscreenCtx.save();
 
                 // 1. Draw the Background Color
-                const style = window.getComputedStyle(element);
-                this.offscreenCtx.fillStyle = style.backgroundColor || DEFAULT_BACKGROUND_COLOR;
+                this.offscreenCtx.fillStyle = this.bgColor;
                 this.offscreenCtx.fillRect(0, 0, this.offscreenCanvas.width, this.offscreenCanvas.height);
 
-                // 2. Draw Background Image (if exists)
-                const bgImage = style.backgroundImage;
-                if (bgImage && bgImage !== 'none') {
-                    const url = bgImage.slice(4, -1).replace(/"/g, "");
-                    const img = new Image();
-                    await new Promise((resolve) => {
-                        img.onload = () => {
-                            // Simple 'cover' logic
-                            const canvasAspect = this.offscreenCanvas.width / this.offscreenCanvas.height;
-                            const imageAspect = img.width / img.height;
-                            let drawW, drawH, drawX, drawY;
+                // 2. Draw Background Image (decoded once in start())
+                if (this.bgImage) {
+                    const img = this.bgImage;
+                    // Simple 'cover' logic
+                    const canvasAspect = this.offscreenCanvas.width / this.offscreenCanvas.height;
+                    const imageAspect = img.width / img.height;
+                    let drawW, drawH, drawX, drawY;
 
-                            if (imageAspect > canvasAspect) {
-                                drawH = this.offscreenCanvas.height;
-                                drawW = drawH * imageAspect;
-                                drawX = (this.offscreenCanvas.width - drawW) / 2;
-                                drawY = 0;
-                            } else {
-                                drawW = this.offscreenCanvas.width;
-                                drawH = drawW / imageAspect;
-                                drawX = 0;
-                                drawY = (this.offscreenCanvas.height - drawH) / 2;
-                            }
-                            this.offscreenCtx.drawImage(img, drawX, drawY, drawW, drawH);
-                            resolve();
-                        };
-                        img.onerror = () => resolve();
-                        img.src = url;
-                    });
+                    if (imageAspect > canvasAspect) {
+                        drawH = this.offscreenCanvas.height;
+                        drawW = drawH * imageAspect;
+                        drawX = (this.offscreenCanvas.width - drawW) / 2;
+                        drawY = 0;
+                    } else {
+                        drawW = this.offscreenCanvas.width;
+                        drawH = drawW / imageAspect;
+                        drawX = 0;
+                        drawY = (this.offscreenCanvas.height - drawH) / 2;
+                    }
+                    this.offscreenCtx.drawImage(img, drawX, drawY, drawW, drawH);
                 }
 
                 // 3. Capture and Draw the SVG Face using Transform Matrix
