@@ -1,3 +1,8 @@
+// Gated debug logging. Workers can't read localStorage, so the main
+// thread forwards the 'protoface-debug' flag via a 'setDebug' message.
+let DEBUG = false;
+const debug = (...args) => { if (DEBUG) console.log(...args); };
+
 // Polyfill for document to prevent ReferenceError in onnxruntime-web 1.20+
 if (typeof document === 'undefined') {
     globalThis.document = {
@@ -45,7 +50,7 @@ const ESPEAK_NG_DATA_URL = 'https://cdn.jsdelivr.net/npm/espeak-ng@1.0.2/dist/es
  */
 async function loadESpeakNGScript() {
     if (globalThis.ESpeakNG) return;
-    console.log('[Worker] Loading eSpeak-ng from CDN...');
+    debug('[Worker] Loading eSpeak-ng from CDN...');
     const res = await fetch(ESPEAK_NG_JS_URL);
     let code = await res.text();
 
@@ -213,27 +218,27 @@ async function runModel(phonemeIds, config, settings = {}) {
  * Main synthesis function
  */
 async function synthesize(text, settings = {}) {
-    console.log('[Worker] synthesize() called, text length:', text.length);
+    debug('[Worker] synthesize() called, text length:', text.length);
 
     if (!voiceConfig || !voiceModel) {
         throw new Error('Voice not loaded');
     }
 
     const espeakVoice = voiceConfig.espeak?.voice || 'en-us';
-    console.log('[Worker] Generating phonemes for voice:', espeakVoice);
+    debug('[Worker] Generating phonemes for voice:', espeakVoice);
     const phonemes = await textToPhonemes(text, espeakVoice);
-    console.log('[Worker] Phonemes generated:', phonemes.length);
+    debug('[Worker] Phonemes generated:', phonemes.length);
 
     if (phonemes.length === 0) {
         throw new Error('Failed to generate phonemes');
     }
 
     const phonemeIds = phonemesToIds(voiceConfig.phoneme_id_map, phonemes);
-    console.log('[Worker] Phoneme IDs:', phonemeIds.length);
+    debug('[Worker] Phoneme IDs:', phonemeIds.length);
 
-    console.log('[Worker] Running ONNX model...');
+    debug('[Worker] Running ONNX model...');
     const audioData = await runModel(phonemeIds, voiceConfig, settings);
-    console.log('[Worker] ONNX complete, audio samples:', audioData.length);
+    debug('[Worker] ONNX complete, audio samples:', audioData.length);
 
     // Debug: Check audio amplitude
     let max = 0;
@@ -241,7 +246,7 @@ async function synthesize(text, settings = {}) {
         const abs = Math.abs(audioData[i]);
         if (abs > max) max = abs;
     }
-    console.log("[Worker] Max amplitude (first 5k samples):", max);
+    debug("[Worker] Max amplitude (first 5k samples):", max);
 
     return {
         audio: audioData,
@@ -251,10 +256,13 @@ async function synthesize(text, settings = {}) {
 
 // Message handler
 self.onmessage = async (event) => {
-    const { type, text, voiceId, modelId } = event.data;
+    const { type, text, modelId } = event.data;
 
     try {
-        if (type === 'load') {
+        if (type === 'setDebug') {
+            DEBUG = !!event.data.enabled;
+        }
+        else if (type === 'load') {
             const { modelUrl: customModelUrl, configUrl: customConfigUrl, voiceId } = event.data;
 
             let modelUrl = customModelUrl;

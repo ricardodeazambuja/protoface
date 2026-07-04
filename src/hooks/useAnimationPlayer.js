@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { parseTextToAnimation } from '../utils/AnimationEngine';
 import { ANALYSER_FFT_SIZE, VOLUME_NORMALIZATION_FACTOR } from '../constants';
+import { debug } from '../utils/debug';
 
 /**
  * useAnimationPlayer - Custom hook for managing the face animation loop
@@ -48,21 +49,27 @@ export const useAnimationPlayer = () => {
         let analyser = null;
 
         if (audioBuffer && audioBuffer.audio) {
-            console.log('[AnimPlayer] Creating AudioContext, audio length:', audioBuffer.audio.length);
+            debug('[AnimPlayer] Creating AudioContext, audio length:', audioBuffer.audio.length);
+            debug('[AnimPlayer] Step 1: Checking AudioContext...');
             if (!audioContextRef.current) {
+                debug('[AnimPlayer] Step 2: Creating new AudioContext...');
                 audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+                debug('[AnimPlayer] Step 2: AudioContext created');
             }
+            debug('[AnimPlayer] Step 3: Checking if suspended...');
             if (audioContextRef.current.state === 'suspended') {
+                debug('[AnimPlayer] Step 3: Resuming AudioContext...');
                 await audioContextRef.current.resume();
+                debug('[AnimPlayer] Step 3: AudioContext resumed');
             }
             if (stopRef.current) return;
 
             const { audio, sampling_rate } = audioBuffer;
-            console.log('[AnimPlayer] Creating audio buffer, samples:', audio.length, 'rate:', sampling_rate);
+            debug('[AnimPlayer] Step 4: Creating audio buffer, samples:', audio.length, 'rate:', sampling_rate);
             const buffer = audioContextRef.current.createBuffer(1, audio.length, sampling_rate);
-            console.log('[AnimPlayer] Copying audio data to buffer...');
+            debug('[AnimPlayer] Step 5: Copying audio data to buffer...');
             buffer.getChannelData(0).set(audio);
-            console.log('[AnimPlayer] Audio buffer ready');
+            debug('[AnimPlayer] Step 6: Audio buffer ready');
 
             audioSource = audioContextRef.current.createBufferSource();
             audioSource.buffer = buffer;
@@ -100,9 +107,9 @@ export const useAnimationPlayer = () => {
             : 1.0;
 
         if (audioSource) {
-            console.log('[AnimPlayer] Starting audio playback...');
+            debug('[AnimPlayer] Starting audio playback...');
             audioSource.start();
-            console.log('[AnimPlayer] Audio started');
+            debug('[AnimPlayer] Audio started');
         }
 
         // Volume analysis loop
