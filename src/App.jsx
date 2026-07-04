@@ -68,15 +68,8 @@ function App() {
         ttsEngine, setTtsEngine, nativeVoices,
         ttsReady, ttsLoading, ttsProgress,
         voice, voiceCatalog, downloadedVoices, catalogLoading,
-        loadVoice, generateSpeech, generateSegmentedSpeech, stopSpeech
-    } = useTTS(
-        // No audio-result callback: storing per-segment worker results here
-        // let a Stop mid-synthesis leave a stale fragment in audioBufferRef,
-        // which the next Play would use instead of re-synthesizing.
-        // generateSegmentedSpeech returns the full audio directly.
-        null,
-        (error) => alert('TTS Error: ' + error)
-    );
+        loadVoice, generateSegmentedSpeech, stopSpeech
+    } = useTTS((error) => alert('TTS Error: ' + error));
 
     const [showConsent, setShowConsent] = useState(false);
     const [ttsRate, setTtsRate] = useState(1.0);
@@ -114,7 +107,7 @@ function App() {
                         noiseScale: ttsVolatility,
                         noiseWScale: ttsVariation,
                         speakerId: speakerId,
-                        lengthScale: 1.0 / animationSpeed,
+                        lengthScale: 1.0 / ttsRate,
                         pitch: nativePitch,
                         volume: nativeVolume,
                         nativeRate: nativeRate

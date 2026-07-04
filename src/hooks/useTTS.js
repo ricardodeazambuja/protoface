@@ -37,7 +37,7 @@ function releaseSharedWorker() {
  * useTTS - Custom hook for managing TTS.
  * Supports Local (Web Worker) and Remote (Bridge) backends.
  */
-export const useTTS = (onAudioResult, onError, options = {}) => {
+export const useTTS = (onError, options = {}) => {
     const { mode = TTS_MODE_LOCAL } = options;
 
     const [useTTS, setUseTTS] = useState(false);
@@ -82,7 +82,7 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
     }, []);
 
     const handleBackendMessage = (data) => {
-        const { type, progress, audio, sampling_rate, error } = data;
+        const { type, progress, error } = data;
 
         if (type === 'progress') {
             setTtsProgress(progress);
@@ -92,7 +92,6 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
             localStorage.setItem('protoface-tts-consented', 'true');
         } else if (type === 'result') {
             setTtsLoading(false);
-            if (onAudioResult) onAudioResult(audio, sampling_rate);
         } else if (type === 'error') {
             console.error('TTS Error:', error);
             setTtsLoading(false);
@@ -158,53 +157,6 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
             });
         }
     }, [voiceCatalog, ttsEngine]);
-
-    const generateSpeech = useCallback((text, settings) => {
-        if (!ttsReady) return;
-
-        if (ttsEngine === TTS_ENGINE_NATIVE) {
-            const utterance = new SpeechSynthesisUtterance(text.replace(/<[^>]*>/g, ''));
-            const selectedNativeVoice = nativeVoices.find(v => v.name === voice);
-            if (selectedNativeVoice) utterance.voice = selectedNativeVoice;
-
-            if (settings && settings.lengthScale) {
-                utterance.rate = Math.max(0.1, Math.min(10, 1 / settings.lengthScale));
-            }
-
-            window.speechSynthesis.speak(utterance);
-            if (onAudioResult) onAudioResult(null, 0); // Trigger animation without buffer
-            return;
-        }
-
-        setTtsLoading(true);
-        const cleanText = text.replace(/<[^>]*>/g, '');
-        const currentRequestId = ++requestIdRef.current;
-
-        const handler = (data) => {
-            const { type, audio, sampling_rate, error, requestId } = data;
-            if (requestId !== currentRequestId) return;
-
-            if (type === 'result') {
-                workerRef.current.removeEventListener('message', listener);
-                setTtsLoading(false);
-                if (onAudioResult) onAudioResult(audio, sampling_rate);
-            } else if (type === 'error') {
-                workerRef.current.removeEventListener('message', listener);
-                setTtsLoading(false);
-                console.error('TTS Generation Error:', error);
-                if (onError) onError(error);
-            }
-        };
-        const listener = (e) => handler(e.data);
-        workerRef.current.addEventListener('message', listener);
-
-        postToBackend({
-            type: 'speak',
-            requestId: currentRequestId,
-            text: cleanText,
-            settings
-        });
-    }, [ttsReady, ttsEngine, voice, nativeVoices, onAudioResult]);
 
     const generateSegmentedSpeech = useCallback(async (script, baseSettings = {}) => {
         if (!ttsReady && ttsEngine !== TTS_ENGINE_NATIVE) throw new Error('TTS not ready');
@@ -280,7 +232,10 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
 
                 if (segment.type === 'text' && segment.text.trim()) {
                     console.log('[useTTS] Processing segment', segmentIndex, '/', segments.length, '- text:', segment.text.substring(0, 20) + '...');
-                    const lengthScale = 1 / segment.speed;
+                    // Compose the caller's base rate with the segment's <speed:x>
+                    // tag; spreading baseSettings below would otherwise discard
+                    // the base lengthScale entirely.
+                    const lengthScale = (baseSettings.lengthScale || 1) / segment.speed;
 
                     const audio = await new Promise((resolve, reject) => {
                         let cleanup;
@@ -372,6 +327,6 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
         nativeVoices,
         ttsReady, ttsLoading, ttsProgress,
         voice, voiceCatalog, downloadedVoices, catalogLoading,
-        loadVoice, generateSpeech, generateSegmentedSpeech, stopSpeech
+        loadVoice, generateSegmentedSpeech, stopSpeech
     };
 };
