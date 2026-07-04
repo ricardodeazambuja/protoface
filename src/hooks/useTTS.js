@@ -214,11 +214,11 @@ export const useTTS = (onError) => {
                 }
             })();
 
-            return { audio: null, sampling_rate: 0 };
+            return { chunks: null, sampling_rate: 0 };
         }
 
         const segments = parseScriptSegments(script);
-        const audioChunks = [];
+        const chunks = [];
         let sampleRate = 22050;
 
         const currentRequestId = ++requestIdRef.current;
@@ -279,31 +279,21 @@ export const useTTS = (onError) => {
                         });
                     });
 
-                    audioChunks.push(audio);
+                    chunks.push({ type: 'audio', audio });
                 } else if (segment.type === 'pause') {
-                    debug('[useTTS] Processing pause segment:', segment.duration, 'ms');
-                    const silenceSamples = Math.floor((segment.duration / 1000) * sampleRate);
-                    const silence = new Float32Array(silenceSamples);
-                    audioChunks.push(silence);
+                    debug('[useTTS] Pause chunk:', segment.duration, 'ms');
+                    // Pauses stay as durations; the player schedules them as
+                    // gaps instead of allocating zero-filled buffers.
+                    chunks.push({ type: 'pause', duration: segment.duration });
                 }
                 segmentIndex++;
             }
 
-            const totalLength = audioChunks.reduce((acc, chunk) => acc + chunk.length, 0);
-            const combinedAudio = new Float32Array(totalLength);
-            let offset = 0;
-            for (const chunk of audioChunks) {
-                combinedAudio.set(chunk, offset);
-                offset += chunk.length;
-            }
-            // Clear chunks to allow garbage collection - critical for iOS memory
-            audioChunks.length = 0;
-
-            debug('[useTTS] Speech generation complete, audio length:', combinedAudio.length, 'samples');
+            debug('[useTTS] Speech generation complete,', chunks.length, 'chunks');
 
             setTtsLoading(false);
             abortControllerRef.current = null;
-            return { audio: combinedAudio, sampling_rate: sampleRate };
+            return { chunks, sampling_rate: sampleRate };
         } catch (error) {
             setTtsLoading(false);
             abortControllerRef.current = null;

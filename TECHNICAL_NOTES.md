@@ -96,15 +96,23 @@ The TTS system supports script tags through segment-based generation (`generateS
 
 2. **Per-Segment Synthesis**: Each text segment is synthesized separately with Piper's `lengthScale` parameter (`lengthScale = 1/speed`).
 
-3. **Silence Injection**: Pause segments create silent audio buffers.
+3. **Chunked Output**: Synthesis returns a list of chunks —
+   `{ type: 'audio', audio }` per text segment and
+   `{ type: 'pause', duration }` per pause. Nothing is concatenated and no
+   silence buffers are allocated.
 
-4. **Audio Concatenation**: All chunks are concatenated into a final audio buffer.
+4. **Gapless Scheduling**: The player creates one `AudioBufferSource` per
+   speech chunk and schedules them back-to-back on the AudioContext clock
+   with `source.start(when)`; pauses are gaps in the schedule. Each chunk's
+   raw array is released as soon as its AudioBuffer copy exists, keeping
+   peak memory at ~1x the speech audio (the old concatenate-then-copy
+   pipeline peaked at ~3x, which crashed iOS Safari on long scripts).
 
 ### Audio-Animation Sync
 
 The animation player (`useAnimationPlayer.js`) calculates a `scaleFactor` to sync animation with audio:
-- Pause durations are **excluded** from scaling (they use exact timing).
-- Speech frames are scaled: `scaleFactor = speechAudioDuration / speechAnimDuration`
+- Pause durations are **excluded** from scaling (they use exact timing and match the schedule gaps).
+- Speech frames are scaled: `scaleFactor = speechAudioDuration / speechAnimDuration`, where `speechAudioDuration` is the summed duration of the scheduled speech chunks.
 
 ---
 
@@ -200,6 +208,7 @@ The TTS worker (`src/utils/piperWorker.js`) uses pinned CDN versions for stabili
 **Mitigations Applied:**
 - Single-threaded WASM execution (`numThreads = 1`)
 - Transferable audio buffers to reduce memory copying
+- Per-segment audio scheduling: no full-length concatenated buffer ever exists (see Gapless Scheduling above)
 
 **User Workaround**: Use **Native TTS** on iOS devices if Neural TTS crashes.
 

@@ -17,10 +17,17 @@ export const useAnimationPlayer = () => {
 
     const animationRef = useRef(null);
     const audioContextRef = useRef(null);
-    const audioSourceRef = useRef(null);
+    const audioSourcesRef = useRef([]);
     const analyserRef = useRef(null);
     const audioDestinationRef = useRef(null);
     const stopRef = useRef(false);
+
+    const stopAllSources = useCallback(() => {
+        for (const source of audioSourcesRef.current) {
+            try { source.stop(); } catch (e) { /* already stopped */ }
+        }
+        audioSourcesRef.current = [];
+    }, []);
 
     const stopAnimation = useCallback(() => {
         stopRef.current = true;
@@ -28,11 +35,8 @@ export const useAnimationPlayer = () => {
         setCurrentPhoneme('closed');
         setTtsVolume(0);
         if (animationRef.current) clearTimeout(animationRef.current);
-        if (audioSourceRef.current) {
-            try { audioSourceRef.current.stop(); } catch (e) { /* already stopped */ }
-            audioSourceRef.current = null;
-        }
-    }, []);
+        stopAllSources();
+    }, [stopAllSources]);
 
     const playAnimation = useCallback(async ({
         text,
@@ -45,77 +49,78 @@ export const useAnimationPlayer = () => {
         stopRef.current = false;
         setIsAnimating(true);
 
-        let audioSource = null;
         let analyser = null;
+        let speechAudioDuration = 0; // ms of actual speech audio (no pauses)
 
-        if (audioBuffer && audioBuffer.audio) {
-            debug('[AnimPlayer] Creating AudioContext, audio length:', audioBuffer.audio.length);
-            debug('[AnimPlayer] Step 1: Checking AudioContext...');
+        const chunks = audioBuffer?.chunks;
+        if (chunks && chunks.length > 0) {
+            const { sampling_rate } = audioBuffer;
+            debug('[AnimPlayer] Scheduling', chunks.length, 'audio chunks, rate:', sampling_rate);
             if (!audioContextRef.current) {
-                debug('[AnimPlayer] Step 2: Creating new AudioContext...');
                 audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-                debug('[AnimPlayer] Step 2: AudioContext created');
             }
-            debug('[AnimPlayer] Step 3: Checking if suspended...');
-            if (audioContextRef.current.state === 'suspended') {
-                debug('[AnimPlayer] Step 3: Resuming AudioContext...');
-                await audioContextRef.current.resume();
-                debug('[AnimPlayer] Step 3: AudioContext resumed');
+            const ctx = audioContextRef.current;
+            if (ctx.state === 'suspended') {
+                await ctx.resume();
             }
-            if (stopRef.current) return;
+            if (stopRef.current) return null;
 
-            const { audio, sampling_rate } = audioBuffer;
-            debug('[AnimPlayer] Step 4: Creating audio buffer, samples:', audio.length, 'rate:', sampling_rate);
-            const buffer = audioContextRef.current.createBuffer(1, audio.length, sampling_rate);
-            debug('[AnimPlayer] Step 5: Copying audio data to buffer...');
-            buffer.getChannelData(0).set(audio);
-            debug('[AnimPlayer] Step 6: Audio buffer ready');
-
-            audioSource = audioContextRef.current.createBufferSource();
-            audioSource.buffer = buffer;
-            audioSourceRef.current = audioSource;
-
-            analyser = audioContextRef.current.createAnalyser();
+            analyser = ctx.createAnalyser();
             analyser.fftSize = ANALYSER_FFT_SIZE;
             analyserRef.current = analyser;
-            audioSource.connect(analyser);
 
             if (shouldRecord) {
-                if (!audioDestinationRef.current || audioDestinationRef.current.context !== audioContextRef.current) {
-                    audioDestinationRef.current = audioContextRef.current.createMediaStreamDestination();
+                if (!audioDestinationRef.current || audioDestinationRef.current.context !== ctx) {
+                    audioDestinationRef.current = ctx.createMediaStreamDestination();
                 }
-                audioSource.connect(audioDestinationRef.current);
             }
-            audioSource.connect(audioContextRef.current.destination);
+
+            // Schedule each segment on the AudioContext clock. Pauses are
+            // gaps in the schedule instead of zero-filled buffers, and each
+            // chunk's source array is released as soon as its AudioBuffer
+            // copy exists — so peak memory is ~1x the speech audio instead
+            // of ~3x (chunk list + concatenated array + full AudioBuffer),
+            // which is what crashed iOS Safari on long scripts.
+            audioSourcesRef.current = [];
+            let when = ctx.currentTime + 0.05;
+            for (const chunk of chunks) {
+                if (chunk.type === 'pause') {
+                    when += chunk.duration / 1000;
+                    continue;
+                }
+                const buffer = ctx.createBuffer(1, chunk.audio.length, sampling_rate);
+                buffer.getChannelData(0).set(chunk.audio);
+                chunk.audio = null; // release the raw array for GC
+                const source = ctx.createBufferSource();
+                source.buffer = buffer;
+                source.connect(analyser);
+                if (shouldRecord) source.connect(audioDestinationRef.current);
+                source.connect(ctx.destination);
+                source.start(when);
+                when += buffer.duration;
+                speechAudioDuration += buffer.duration * 1000;
+                audioSourcesRef.current.push(source);
+            }
+            chunks.length = 0;
+            debug('[AnimPlayer] Scheduled', audioSourcesRef.current.length, 'sources, speech:', Math.round(speechAudioDuration), 'ms');
         }
 
         const { sequence } = parseTextToAnimation(text, speed, expressiveness);
 
-        // Calculate durations excluding pauses (which have fixed timing)
-        const totalPauseDuration = sequence
-            .filter(item => item.isPause)
-            .reduce((acc, curr) => acc + curr.duration, 0);
+        // Scale speech frames so the animation tracks the audio; pause
+        // frames keep exact timing and match the schedule gaps above.
         const speechAnimDuration = sequence
             .filter(item => !item.isPause)
             .reduce((acc, curr) => acc + curr.duration, 0);
 
-        const audioDuration = (audioBuffer && audioBuffer.audio) ? (audioBuffer.audio.length / audioBuffer.sampling_rate) * 1000 : 0;
-        // Audio also includes pauses, so subtract them for speech-only comparison
-        const speechAudioDuration = audioDuration - totalPauseDuration;
         const scaleFactor = speechAudioDuration > 0 && speechAnimDuration > 0
             ? speechAudioDuration / speechAnimDuration
             : 1.0;
 
-        if (audioSource) {
-            debug('[AnimPlayer] Starting audio playback...');
-            audioSource.start();
-            debug('[AnimPlayer] Audio started');
-        }
-
         // Volume analysis loop
         const dataArray = analyser ? new Uint8Array(analyser.frequencyBinCount) : null;
         const updateVolume = () => {
-            if (!analyser || !audioSourceRef.current) return;
+            if (!analyser || audioSourcesRef.current.length === 0) return;
             analyser.getByteFrequencyData(dataArray);
             const average = dataArray.reduce((acc, v) => acc + v, 0) / dataArray.length;
             setTtsVolume(Math.min(1, average / VOLUME_NORMALIZATION_FACTOR));
@@ -155,9 +160,9 @@ export const useAnimationPlayer = () => {
     useEffect(() => {
         return () => {
             if (animationRef.current) clearTimeout(animationRef.current);
-            if (audioSourceRef.current) audioSourceRef.current.stop();
+            stopAllSources();
         };
-    }, []);
+    }, [stopAllSources]);
 
     return {
         isAnimating,
