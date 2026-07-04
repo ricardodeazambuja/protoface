@@ -249,6 +249,10 @@ export const useTTS = (onAudioResult, onError, options = {}) => {
             (async () => {
                 const selectedNativeVoice = nativeVoices.find(v => v.name === voice);
                 for (const segment of segments) {
+                    // speechSynthesis.cancel() only kills the current utterance
+                    // (resolving speakSegment via onend/onerror); without this
+                    // check the loop would immediately speak the next segment.
+                    if (signal.aborted) break;
                     if (segment.type === 'text' && segment.text.trim()) {
                         const segmentRate = baseRate * (segment.speed || 1.0);
                         await speakSegment(segment.text, segmentRate, selectedNativeVoice, pitch, volume);
